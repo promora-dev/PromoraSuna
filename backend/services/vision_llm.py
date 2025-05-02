@@ -2,7 +2,7 @@
 Vision LLM API interface for making calls to vision-capable language models.
 
 This module provides functionality for making API calls to vision-capable LLMs
-(primarily GPT-4o Vision) to analyze images and extract information.
+(primarily GPT-4.1) to analyze images and extract information.
 """
 
 import os
@@ -99,7 +99,7 @@ async def analyze_image_with_gpt4_vision(
         
         for attempt in range(MAX_RETRIES):
             try:
-                logger.debug(f"Making GPT-4o Vision API call (attempt {attempt + 1}/{MAX_RETRIES})")
+                logger.debug(f"Making GPT-4.1 API call (attempt {attempt + 1}/{MAX_RETRIES})")
                 
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
@@ -122,10 +122,10 @@ async def analyze_image_with_gpt4_vision(
                                 logger.warning(f"Waiting {RETRY_DELAY} seconds before retry")
                                 await asyncio.sleep(RETRY_DELAY)
             except Exception as e:
-                logger.error(f"Error during GPT-4o Vision API call: {str(e)}")
+                logger.error(f"Error during GPT-4.1 API call: {str(e)}")
                 await asyncio.sleep(RETRY_DELAY)
         
-        raise VisionLLMError(f"Failed to make GPT-4o Vision API call after {MAX_RETRIES} attempts")
+        raise VisionLLMError(f"Failed to make GPT-4.1 API call after {MAX_RETRIES} attempts")
     except Exception as e:
         logger.error(f"Error in analyze_image_with_gpt4_vision: {str(e)}")
         raise VisionLLMError(f"Image analysis failed: {str(e)}")
