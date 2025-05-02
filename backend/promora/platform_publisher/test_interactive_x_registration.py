@@ -628,7 +628,7 @@ class InteractiveRegistration:
                     continue
                 
                 current_url = await self.browser_tool.get_current_url()
-                url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages", "/compose/tweet", "/settings", "/i/flow/signup", "/i/flow/login", "/i/flow/single_sign_on"]) or "twitter.com" in current_url or "x.com" in current_url
+                url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages", "/compose/tweet", "/settings"]) or "twitter.com/home" in current_url or "x.com/home" in current_url
                 
                 keywords_success = self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed", "主页", "时间线"])
                 
@@ -657,14 +657,22 @@ class InteractiveRegistration:
                         home_element_exists = True
                         break
                 
-                if url_success or keywords_success or element_success or home_element_exists:
+                if (home_element_exists or (url_success and (keywords_success or element_success))):
                     logger.info("注册完成! 检测到X主页界面")
                     logger.info(f"URL检查: {'成功' if url_success else '失败'}, 当前URL: {current_url}")
                     logger.info(f"关键词检查: {'成功' if keywords_success else '失败'}, 页面类型: {page_type}")
                     logger.info(f"元素检查: {'成功' if element_success else '失败'}")
                     logger.info(f"主页元素检查: {'成功' if home_element_exists else '失败'}")
                     
-                    await self._human_delay(5.0, 8.0)
+                    if "/i/flow/" in current_url:
+                        logger.info("检测到仍在注册流程中，尝试导航到主页...")
+                        try:
+                            await self.browser_tool.navigate("https://twitter.com/home")
+                            await self._human_delay(5.0, 8.0)
+                        except Exception as e:
+                            logger.warning(f"导航到主页失败: {str(e)}")
+                    
+                    await self._human_delay(8.0, 12.0)
                     
                     timestamp = int(datetime.now().timestamp())
                     
@@ -742,7 +750,17 @@ class InteractiveRegistration:
             logger.warning(f"达到最大步骤数 {max_steps}，检查是否已经成功")
             
             current_url = await self.browser_tool.get_current_url()
-            url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages", "/compose/tweet", "/settings", "/i/flow/signup", "/i/flow/login", "/i/flow/single_sign_on"]) or "twitter.com" in current_url or "x.com" in current_url
+            url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages", "/compose/tweet", "/settings"]) or "twitter.com/home" in current_url or "x.com/home" in current_url
+            
+            if "/i/flow/" in current_url:
+                logger.info("检测到仍在注册流程中，尝试导航到主页...")
+                try:
+                    await self.browser_tool.navigate("https://twitter.com/home")
+                    await self._human_delay(5.0, 8.0)
+                    current_url = await self.browser_tool.get_current_url()
+                    url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages"]) or "twitter.com/home" in current_url or "x.com/home" in current_url
+                except Exception as e:
+                    logger.warning(f"导航到主页失败: {str(e)}")
             
             success_indicators = [
                 "div[data-testid='primaryColumn']",
