@@ -67,6 +67,12 @@ def create_app() -> FastAPI:
     app.include_router(analytics_router)
     app.include_router(verification_router)
     
+    from .verification_routes import router as verification_routes
+    from .registration_routes import router as registration_routes
+    
+    app.include_router(verification_routes)
+    app.include_router(registration_routes)
+    
     @app.get("/", response_model=Dict[str, Any])
     async def root():
         """Root endpoint for the API."""

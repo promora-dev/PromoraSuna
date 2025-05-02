@@ -44,6 +44,8 @@ from ..analytics.models import (
     AnalyticsReport,
     AnalyticsFilter
 )
+from .verification_routes import router as verification_routes_router
+from .registration_routes import router as registration_routes_router
 
 
 content_router = APIRouter(prefix="/content", tags=["content"])
