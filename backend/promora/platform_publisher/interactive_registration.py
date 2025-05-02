@@ -291,7 +291,7 @@ class InteractiveRegistration:
 
 ---
 
-📸 页面截图：你将看到的是一个注册页面的截图，当前步骤: {step}。
+📸 页面截图：你将看到的是一个注册页面的截图。
 
 {registration_info}
 
@@ -310,24 +310,32 @@ class InteractiveRegistration:
       "description": "点击 Name 输入框",
       "target_hint": "输入框上方或内部提示为 'Name' 或类似",
       "coordinates": [120, 280],
-      "value": null
+      "value": null,
+      "duration": 0.8
     }},
     {{
       "step": 2,
       "type": "type",
       "description": "输入用户名",
       "coordinates": [120, 280],
-      "value": "{username}"
+      "value": "{username}",
+      "duration": 1.2
     }},
     {{
       "step": 3,
       "type": "click",
       "description": "点击 'Next' 按钮",
       "coordinates": [500, 600],
-      "value": null
+      "value": null,
+      "duration": 0.5
     }}
   ],
-  "final_remark": "完成后应该跳转到验证码页面，等待验证码输入"
+  "final_remark": "完成后应该跳转到验证码页面，等待验证码输入",
+  "human_simulation": {{
+    "typing_speed": "正常",
+    "mouse_movement": "自然",
+    "overall_pace": "正常"
+  }}
 }}
 
 ⚠️ 要求：
@@ -346,7 +354,7 @@ class InteractiveRegistration:
 
 ---
 
-📸 页面截图：你将看到的是X（Twitter）注册页面的截图，当前步骤: {step}。
+📸 页面截图：你将看到的是X（Twitter）注册页面的截图。
 
 {registration_info}
 
@@ -411,7 +419,7 @@ class InteractiveRegistration:
 
 ---
 
-📸 页面截图：你将看到的是知乎注册/登录页面的截图，当前步骤: {step}。
+📸 页面截图：你将看到的是知乎注册/登录页面的截图。
 
 {registration_info}
 
@@ -766,7 +774,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 8  # 最大步骤数，减少步骤数但确保能完成注册（原为15步，现为8步）
+            max_steps = 8  # 最大步骤数，减少步骤数以优化注册流程（原为12步，现为8步）
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
@@ -804,14 +812,27 @@ class InteractiveRegistration:
                 if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed", "主页", "时间线"]) or await self.browser_tool.element_exists("div[data-testid='primaryColumn']", timeout=2000):
                     logger.info("注册完成! 检测到X主页界面")
                     
-                    await self._human_delay(3.0, 5.0)
+                    current_url = await self.browser_tool.get_current_url()
+                    if "/i/flow/" in current_url:
+                        logger.info("检测到仍在注册流程中，尝试导航到主页...")
+                        try:
+                            await self.browser_tool.navigate("https://twitter.com/home")
+                            await self._human_delay(5.0, 8.0)
+                        except Exception as e:
+                            logger.warning(f"导航到主页失败: {str(e)}")
+                    
+                    await self._human_delay(5.0, 8.0)
                     
                     final_screenshot = await self._take_screenshot(f"success_final_{username}", "x")
                     logger.info(f"保存最终成功界面截图: {final_screenshot}")
                     
-                    success_path = f"/tmp/promora_interactive_x_registration/x_registration_success_{username}_{int(datetime.now().timestamp())}.png"
+                    success_path = f"/tmp/x_registration_success.png"
                     await self.browser_tool.screenshot(success_path)
-                    logger.info(f"额外保存成功界面截图: {success_path}")
+                    logger.info(f"保存成功界面截图到固定路径: {success_path}")
+                    
+                    timestamp_path = f"/tmp/promora_interactive_x_registration/x_registration_success_{username}_{int(datetime.now().timestamp())}.png"
+                    await self.browser_tool.screenshot(timestamp_path)
+                    logger.info(f"额外保存成功界面截图(带时间戳): {timestamp_path}")
                     
                     account = PlatformAccount(
                         platform=PlatformType.X,
@@ -906,12 +927,22 @@ class InteractiveRegistration:
                 if not actions:
                     logger.warning(f"步骤 {self.current_step}: 没有建议的操作")
                     
+                    if await self.browser_tool.element_exists("text=Use email instead", timeout=1000):
+                        logger.info("检测到 'Use email instead' 按钮，执行点击...")
+                        await self._human_click(selector="text=Use email instead")
+                        await self._human_delay(1.0, 2.0)
+                        continue
+                    
                     common_selectors = [
                         "span:has-text('Create account')",
                         "span:has-text('创建账号')",
                         "span:has-text('Next')",
                         "span:has-text('下一步')",
+                        "div[role='button']:has-text('Next')",
+                        "div[role='button']:has-text('下一步')",
                         "div[role='button']",
+                        "button:has-text('Next')",
+                        "button:has-text('下一步')",
                         "button"
                     ]
                     
@@ -919,17 +950,16 @@ class InteractiveRegistration:
                         if await self.browser_tool.element_exists(selector, timeout=1000):
                             logger.debug(f"找到常见元素: {selector}")
                             await self._human_click(selector=selector)
-                            await self._human_delay()
+                            await self._human_delay(1.0, 2.0)
                             break
                     else:
                         logger.warning("未找到任何可交互元素")
                         
-                        if self.current_step % 3 == 0:  # 每3步尝试一次
-                            logger.debug("尝试按Tab和Enter键")
-                            await self.browser_tool.press("Tab")
-                            await self._human_delay(0.5, 1.0)
-                            await self.browser_tool.press("Enter")
-                            await self._human_delay(1.0, 2.0)
+                        logger.debug("尝试按Tab和Enter键")
+                        await self.browser_tool.press("Tab")
+                        await self._human_delay(0.5, 1.0)
+                        await self.browser_tool.press("Enter")
+                        await self._human_delay(1.0, 2.0)
                 else:
                     actions_to_execute = plan if plan else suggested_actions
                     success = await self._execute_suggested_actions(actions_to_execute)
@@ -950,27 +980,62 @@ class InteractiveRegistration:
                 
             logger.warning(f"达到最大步骤数 {max_steps}，检查是否已经成功")
             
+            try:
+                logger.info("尝试导航到X主页...")
+                await self.browser_tool.navigate("https://twitter.com/home")
+                await self._human_delay(5.0, 8.0)
+            except Exception as e:
+                logger.warning(f"导航到主页失败: {str(e)}")
+            
+            current_url = await self.browser_tool.get_current_url()
+            logger.info(f"当前URL: {current_url}")
+            
+            url_success = False
+            if "twitter.com/home" in current_url or "x.com/home" in current_url:
+                logger.info("URL路径检查: 成功 - 检测到X主页URL")
+                url_success = True
+            
             success_indicators = [
                 "div[data-testid='primaryColumn']",
                 "div[data-testid='AppTabBar_Home_Link']",
                 "div[data-testid='SideNav_NewTweet_Button']",
                 "a[aria-label='Profile']",
                 "div[aria-label='Home timeline']",
-                "div[aria-label='主页时间线']"
+                "div[aria-label='主页时间线']",
+                "div[aria-label='Timeline: Your Home Timeline']",
+                "div[aria-label='时间线：你的主页时间线']",
+                "div[data-testid='tweet']",
+                "div[data-testid='tweetText']",
+                "div[data-testid='tweetButtonInline']",
+                "div[data-testid='sidebarColumn']",
+                "div[aria-label='Navigation']",
+                "div[aria-label='导航']",
+                "div[data-testid='ScrollSnap-List']",
+                "div[data-testid='cellInnerDiv']"
             ]
             
-            success_detected = False
+            element_success = False
             for indicator in success_indicators:
                 if await self.browser_tool.element_exists(indicator, timeout=1000):
                     logger.info(f"检测到成功指标: {indicator}")
-                    success_detected = True
+                    element_success = True
                     break
+                    
+            success_detected = url_success or element_success
                     
             if success_detected:
                 logger.info("检测到X主页界面，注册可能已经成功")
                 
                 final_screenshot = await self._take_screenshot(f"final_check_success_{username}", "x")
                 logger.info(f"保存最终成功界面截图: {final_screenshot}")
+                
+                success_path = f"/tmp/x_registration_success.png"
+                await self.browser_tool.screenshot(success_path)
+                logger.info(f"额外保存成功界面截图到固定路径: {success_path}")
+                
+                timestamp_path = f"/tmp/promora_interactive_x_registration/x_success_{username}_{int(datetime.now().timestamp())}.png"
+                await self.browser_tool.screenshot(timestamp_path)
+                logger.info(f"额外保存成功界面截图(带时间戳): {timestamp_path}")
                 
                 account = PlatformAccount(
                     platform=PlatformType.X,
