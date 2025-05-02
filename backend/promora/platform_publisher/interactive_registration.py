@@ -11,6 +11,7 @@ import asyncio
 import random
 import time
 import logging
+import re
 from typing import Dict, Any, List, Optional, Tuple, Union
 from pathlib import Path
 from datetime import datetime
@@ -89,7 +90,12 @@ class InteractiveRegistration:
         Returns:
             是否匹配任一关键词
         """
-        return any(kw.lower() in text.lower() for kw in keywords)
+        if not text:
+            return False
+            
+        text = text.lower()
+        pattern = '|'.join(re.escape(kw.lower()) for kw in keywords)
+        return bool(re.search(pattern, text))
         
     async def _human_delay(self, min_delay: float = None, max_delay: float = None) -> None:
         """模拟人类操作之间的延迟
@@ -118,7 +124,9 @@ class InteractiveRegistration:
         try:
             if coordinates:
                 x, y = coordinates
-                await self.browser_tool.move_mouse(x, y)
+                offset_x = random.randint(-3, 3)
+                offset_y = random.randint(-3, 3)
+                await self.browser_tool.move_mouse(x + offset_x, y + offset_y)
                 await self._human_delay(0.1, 0.3)
                 await self.browser_tool.page.mouse.click(x, y)
             elif selector:
@@ -129,16 +137,33 @@ class InteractiveRegistration:
                 
             await self._human_delay(0.2, 0.5)
             
+            if random.random() < 0.3:  # 有时候会先清空输入框
+                await self.browser_tool.press("Control+a")
+                await self._human_delay(0.1, 0.2)
+                await self.browser_tool.press("Backspace")
+                await self._human_delay(0.2, 0.4)
+            
             for char in text:
-                if random.random() < 0.05:  # 偶尔停顿一下，更像人类
-                    await self._human_delay(0.5, 1.0)
+                if random.random() < 0.08:  # 增加停顿概率
+                    await self._human_delay(0.5, 1.2)
                 
                 await self.browser_tool.type(char)
                 
                 if ord(char) > 127:
-                    await asyncio.sleep(random.uniform(0.2, 0.4))
+                    await asyncio.sleep(random.uniform(0.3, 0.5))  # 增加中文输入延迟
+                elif char in ".,;:!?()[]{}\"'":
+                    await asyncio.sleep(random.uniform(0.1, 0.3))
+                elif char.isdigit():
+                    await asyncio.sleep(random.uniform(0.03, 0.15))
                 else:
                     await asyncio.sleep(random.uniform(self.min_typing_delay, self.max_typing_delay))
+                
+                if len(text) > 5 and random.random() < 0.03:
+                    await self._human_delay(0.1, 0.2)
+                    await self.browser_tool.press("Backspace")
+                    await self._human_delay(0.2, 0.4)
+                    await self.browser_tool.type(char)
+                    await asyncio.sleep(random.uniform(0.1, 0.2))
                 
         except Exception as e:
             logger.error(f"人类输入模拟时出错: {e}")
@@ -158,25 +183,32 @@ class InteractiveRegistration:
             if coordinates:
                 x, y = coordinates
                 
-                offset_x = random.randint(-5, 5)
-                offset_y = random.randint(-5, 5)
+                offset_x = random.randint(-8, 8)
+                offset_y = random.randint(-8, 8)
                 
+                await self.browser_tool.move_mouse(x + offset_x * 2, y + offset_y * 2)
+                await self._human_delay(0.1, 0.2)
                 await self.browser_tool.move_mouse(x + offset_x, y + offset_y)
-                await self._human_delay(0.1, 0.3)
+                await self._human_delay(0.05, 0.15)
                 
                 await self.browser_tool.page.mouse.click(x, y)
                 logger.debug(f"点击坐标: ({x}, {y})")
                 
             elif selector:
-                if random.random() < 0.3:  # 偶尔先移动鼠标到元素附近，更像人类
+                if random.random() < 0.4:  # 增加概率
                     element_pos = await self.browser_tool.get_element_position(selector)
                     if element_pos:
                         x, y = element_pos
                         
-                        offset_x = random.randint(-20, 20)
-                        offset_y = random.randint(-20, 20)
+                        offset_x = random.randint(-25, 25)
+                        offset_y = random.randint(-25, 25)
+                        
+                        await self.browser_tool.move_mouse(x + offset_x * 2, y + offset_y * 2)
+                        await self._human_delay(0.1, 0.2)
                         await self.browser_tool.move_mouse(x + offset_x, y + offset_y)
-                        await self._human_delay(0.1, 0.3)
+                        await self._human_delay(0.1, 0.2)
+                        await self.browser_tool.move_mouse(x, y)
+                        await self._human_delay(0.05, 0.1)
                 
                 await self.browser_tool.click(selector)
                 logger.debug(f"点击选择器: {selector}")
@@ -206,7 +238,9 @@ class InteractiveRegistration:
             timestamp = int(datetime.now().timestamp())
             name = name or f"{self.current_step}"
             platform_prefix = f"{platform}_" if platform else ""
-            screenshot_path = f"{self.screenshot_dir}/{platform_prefix}step_{name}_{timestamp}.png"
+            step_info = f"step{self.current_step}_" if self.current_step > 0 else ""
+            
+            screenshot_path = f"{self.screenshot_dir}/{platform_prefix}{step_info}{name}_{timestamp}.png"
             
             await self.browser_tool.screenshot(screenshot_path)
             logger.debug(f"截图已保存: {screenshot_path}")
@@ -226,6 +260,44 @@ class InteractiveRegistration:
         Returns:
             提示词
         """
+        base_prompt = f"""
+分析这个页面截图，当前步骤: {step}。
+
+请提供以下信息：
+1. 页面类型
+2. 当前操作步骤
+3. 页面上的主要元素及其位置坐标
+4. 推荐的下一步操作
+
+以JSON格式返回结果，包含以下字段：
+{{
+    "page_type": "页面类型描述",
+    "current_step": "当前操作步骤",
+    "elements": [
+        {{
+            "type": "元素类型（按钮/输入框/下拉菜单等）",
+            "description": "元素描述",
+            "coordinates": [x, y],
+            "is_active": true/false
+        }}
+    ],
+    "suggested_actions": [
+        {{
+            "type": "操作类型（click/type/select等）",
+            "target": "操作目标描述",
+            "coordinates": [x, y],
+            "value": "要输入的值（如果是type操作）"
+        }}
+    ],
+    "next_step": "下一步描述"
+}}
+
+注意：
+1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+2. 坐标值应该是页面上元素的中心位置
+3. 只返回JSON格式的结果，不要有其他解释
+"""
+
         if platform == "x":
             return f"""
 分析这个X（Twitter）注册页面的截图，当前步骤: {step}。
@@ -240,37 +312,73 @@ class InteractiveRegistration:
 {{
     "page_type": "页面类型描述",
     "registration_step": "当前注册步骤",
-    "elements": [...],
-    "suggested_actions": [...],
+    "elements": [
+        {{
+            "type": "元素类型（按钮/输入框/下拉菜单等）",
+            "description": "元素描述",
+            "coordinates": [x, y],
+            "is_active": true/false
+        }}
+    ],
+    "suggested_actions": [
+        {{
+            "type": "操作类型（click/type/select等）",
+            "target": "操作目标描述",
+            "coordinates": [x, y],
+            "value": "要输入的值（如果是type操作）"
+        }}
+    ],
     "next_step": "下一步描述"
 }}
 
 注意：
-1. 所有坐标必须是实际的数字
-2. 只返回JSON格式，不要附带解释
+1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+2. 坐标值应该是页面上元素的中心位置
+3. 只返回JSON格式的结果，不要有其他解释
+4. 如果看到"Use email instead"按钮，请将其作为第一个建议操作
+5. 对于生日选择，请确保年份在2000年之前，避免年龄限制问题
 """
-        return f"""
-分析这个页面截图，当前步骤: {step}。
+        elif platform == "zhihu":
+            return f"""
+分析这个知乎注册/登录页面的截图，当前步骤: {step}。
 
 请提供以下信息：
-1. 页面类型
+1. 页面类型（注册页面、登录页面、验证码页面等）
 2. 当前操作步骤
-3. 页面上的主要元素及其位置坐标
-4. 推荐的下一步操作
+3. 页面上的主要元素（按钮、输入框、验证码等）及其位置坐标
+4. 推荐的下一步操作（点击、输入文本、拖动滑块等）
 
 以JSON格式返回结果，包含以下字段：
 {{
     "page_type": "页面类型描述",
     "current_step": "当前操作步骤",
-    "elements": [...],
-    "suggested_actions": [...],
+    "elements": [
+        {{
+            "type": "元素类型（按钮/输入框/滑块等）",
+            "description": "元素描述",
+            "coordinates": [x, y],
+            "is_active": true/false
+        }}
+    ],
+    "suggested_actions": [
+        {{
+            "type": "操作类型（click/type/drag等）",
+            "target": "操作目标描述",
+            "coordinates": [x, y],
+            "value": "要输入的值（如果是type操作）"
+        }}
+    ],
     "next_step": "下一步描述"
 }}
 
 注意：
-1. 所有坐标必须是实际的数字
-2. 只返回JSON格式，不要附带解释
+1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+2. 坐标值应该是页面上元素的中心位置
+3. 只返回JSON格式的结果，不要有其他解释
+4. 如果看到滑动验证码，请提供滑块起始坐标和目标坐标
 """
+        
+        return base_prompt
     
     async def _analyze_current_page(self, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """分析当前页面并获取LLM引导
