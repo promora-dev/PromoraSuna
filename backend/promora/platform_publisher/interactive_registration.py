@@ -79,6 +79,18 @@ class InteractiveRegistration:
         self.max_retries = 3  # 最大重试次数
         self.current_step = 0  # 当前步骤
         
+    def _match_keywords(self, text: str, keywords: List[str]) -> bool:
+        """匹配关键词，支持中英文统一判断
+        
+        Args:
+            text: 要检查的文本
+            keywords: 关键词列表
+            
+        Returns:
+            是否匹配任一关键词
+        """
+        return any(kw.lower() in text.lower() for kw in keywords)
+        
     async def _human_delay(self, min_delay: float = None, max_delay: float = None) -> None:
         """模拟人类操作之间的延迟
         
@@ -123,8 +135,10 @@ class InteractiveRegistration:
                 
                 await self.browser_tool.type(char)
                 
-                char_delay = random.uniform(self.min_typing_delay, self.max_typing_delay)
-                await asyncio.sleep(char_delay)
+                if ord(char) > 127:
+                    await asyncio.sleep(random.uniform(0.2, 0.4))
+                else:
+                    await asyncio.sleep(random.uniform(self.min_typing_delay, self.max_typing_delay))
                 
         except Exception as e:
             logger.error(f"人类输入模拟时出错: {e}")
@@ -174,11 +188,12 @@ class InteractiveRegistration:
         except Exception as e:
             logger.error(f"人类点击模拟时出错: {e}")
     
-    async def _take_screenshot(self, name: str = None) -> str:
+    async def _take_screenshot(self, name: str = None, platform: str = None) -> str:
         """截取当前页面截图
         
         Args:
             name: 截图名称前缀
+            platform: 平台名称
             
         Returns:
             截图路径
@@ -189,8 +204,9 @@ class InteractiveRegistration:
             
         try:
             timestamp = int(datetime.now().timestamp())
-            name = name or f"step_{self.current_step}"
-            screenshot_path = f"{self.screenshot_dir}/{name}_{timestamp}.png"
+            name = name or f"{self.current_step}"
+            platform_prefix = f"{platform}_" if platform else ""
+            screenshot_path = f"{self.screenshot_dir}/{platform_prefix}step_{name}_{timestamp}.png"
             
             await self.browser_tool.screenshot(screenshot_path)
             logger.debug(f"截图已保存: {screenshot_path}")
@@ -199,6 +215,62 @@ class InteractiveRegistration:
         except Exception as e:
             logger.error(f"截取截图时出错: {e}")
             return None
+    
+    def _build_prompt(self, platform: str, step: int) -> str:
+        """构建LLM分析提示词
+        
+        Args:
+            platform: 平台名称
+            step: 当前步骤
+            
+        Returns:
+            提示词
+        """
+        if platform == "x":
+            return f"""
+分析这个X（Twitter）注册页面的截图，当前步骤: {step}。
+
+请提供以下信息：
+1. 页面类型（注册初始页面、个人信息页面、邮箱输入页面等）
+2. 当前注册步骤
+3. 页面上的主要元素（按钮、输入框、下拉菜单等）及其位置坐标
+4. 推荐的下一步操作（点击、输入文本、选择选项等）
+
+以JSON格式返回结果，包含以下字段：
+{{
+    "page_type": "页面类型描述",
+    "registration_step": "当前注册步骤",
+    "elements": [...],
+    "suggested_actions": [...],
+    "next_step": "下一步描述"
+}}
+
+注意：
+1. 所有坐标必须是实际的数字
+2. 只返回JSON格式，不要附带解释
+"""
+        return f"""
+分析这个页面截图，当前步骤: {step}。
+
+请提供以下信息：
+1. 页面类型
+2. 当前操作步骤
+3. 页面上的主要元素及其位置坐标
+4. 推荐的下一步操作
+
+以JSON格式返回结果，包含以下字段：
+{{
+    "page_type": "页面类型描述",
+    "current_step": "当前操作步骤",
+    "elements": [...],
+    "suggested_actions": [...],
+    "next_step": "下一步描述"
+}}
+
+注意：
+1. 所有坐标必须是实际的数字
+2. 只返回JSON格式，不要附带解释
+"""
     
     async def _analyze_current_page(self, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """分析当前页面并获取LLM引导
@@ -209,89 +281,19 @@ class InteractiveRegistration:
         Returns:
             LLM分析结果
         """
-        screenshot_path = await self._take_screenshot(f"analyze_{self.current_step}")
+        context = context or {}
+        context["step"] = self.current_step
+        platform = context.get("platform", "unknown")
+        
+        screenshot_path = await self._take_screenshot(f"analyze_{self.current_step}", platform)
         if not screenshot_path:
             logger.error("无法截取截图，无法分析当前页面")
             return {
                 "success": False,
                 "error": "无法截取截图"
             }
-            
-        context = context or {}
-        context["step"] = self.current_step
-        platform = context.get("platform", "unknown")
         
-        if platform == "x":
-            prompt = f"""
-            分析这个X（Twitter）注册页面的截图，当前步骤: {self.current_step}。
-            
-            请提供以下信息：
-            1. 页面类型（注册初始页面、个人信息页面、邮箱输入页面等）
-            2. 当前注册步骤
-            3. 页面上的主要元素（按钮、输入框、下拉菜单等）及其位置坐标
-            4. 推荐的下一步操作（点击、输入文本、选择选项等）
-            
-            以JSON格式返回结果，包含以下字段：
-            {{
-                "page_type": "页面类型描述",
-                "registration_step": "当前注册步骤",
-                "elements": [
-                    {{
-                        "type": "元素类型",
-                        "description": "元素描述",
-                        "coordinates": [x, y],
-                        "is_active": true/false
-                    }}
-                ],
-                "suggested_actions": [
-                    {{
-                        "type": "操作类型（click/type/select）",
-                        "target": "操作目标描述",
-                        "coordinates": [x, y],
-                        "value": "要输入的值（如果是type操作）"
-                    }}
-                ],
-                "next_step": "下一步描述"
-            }}
-            
-            注意：
-            1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
-            2. 坐标值应该是页面上元素的中心位置
-            3. 只返回JSON格式的结果，不要有其他解释
-            """
-        else:
-            prompt = f"""
-            分析这个页面截图，当前步骤: {self.current_step}。
-            
-            请提供以下信息：
-            1. 页面类型
-            2. 当前操作步骤
-            3. 页面上的主要元素及其位置坐标
-            4. 推荐的下一步操作
-            
-            以JSON格式返回结果，包含以下字段：
-            {{
-                "page_type": "页面类型描述",
-                "current_step": "当前操作步骤",
-                "elements": [
-                    {{
-                        "type": "元素类型",
-                        "description": "元素描述",
-                        "coordinates": [x, y],
-                        "is_active": true/false
-                    }}
-                ],
-                "suggested_actions": [
-                    {{
-                        "type": "操作类型（click/type/select）",
-                        "target": "操作目标描述",
-                        "coordinates": [x, y],
-                        "value": "要输入的值（如果是type操作）"
-                    }}
-                ],
-                "next_step": "下一步描述"
-            }}
-            """
+        prompt = self._build_prompt(platform, self.current_step)
         
         try:
             result = await analyze_image_with_gpt4_vision(
@@ -375,7 +377,9 @@ class InteractiveRegistration:
                 elif action_type == "type":
                     await self._human_typing(text=value, coordinates=coordinates, selector=selector)
                 elif action_type == "select":
-                    if coordinates:
+                    if selector and value:
+                        await self.browser_tool.select_option(selector, value)
+                    elif coordinates:
                         await self._human_click(coordinates=coordinates)
                     elif selector:
                         await self._human_click(selector=selector)
@@ -548,6 +552,11 @@ class InteractiveRegistration:
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
                 
+                if await self.browser_tool.element_exists("text=Use email instead"):
+                    logger.info("检测到 'Use email instead' 按钮，执行点击...")
+                    await self._human_click(selector="text=Use email instead")
+                    await self._human_delay(0.5, 1.0)
+                
                 analysis = await self._analyze_current_page(context)
                 
                 if not analysis.get("success", False):
@@ -562,7 +571,7 @@ class InteractiveRegistration:
                         return None
                 
                 page_type = analysis.get("page_type", "").lower()
-                if "验证" in page_type or "verification" in page_type or "captcha" in page_type or "code" in page_type:
+                if self._match_keywords(page_type, ["验证", "verification", "captcha", "code"]):
                     logger.info(f"检测到验证页面: {page_type}")
                     verification_success = await self._handle_verification("x", username)
                     
@@ -573,7 +582,7 @@ class InteractiveRegistration:
                     await self._human_delay(2.0, 3.0)
                     continue
                 
-                if "完成" in page_type or "成功" in page_type or "完成注册" in page_type or "注册成功" in page_type or "home" in page_type or "timeline" in page_type or "feed" in page_type:
+                if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed"]):
                     logger.info("注册完成!")
                     
                     account = PlatformAccount(
