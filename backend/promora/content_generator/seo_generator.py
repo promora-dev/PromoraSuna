@@ -46,6 +46,113 @@ class SEOContentGenerator:
             summaries=summaries,
             language=request.language
         )
+        
+    async def generate_seo_content(self, keyword: str, industry: str, audience: str, language: str = "en", 
+                                  brand_materials: Optional[List[str]] = None, tone: str = "professional", 
+                                  length: str = "medium") -> Dict[str, Any]:
+        """Generate SEO-optimized content based on the provided parameters.
+        
+        Args:
+            keyword: Primary keyword to target in the content
+            industry: Industry or niche for the content
+            audience: Target audience for the content
+            language: Language for the content
+            brand_materials: Optional brand materials or existing content fragments
+            tone: Tone of the content
+            length: Length of the content
+            
+        Returns:
+            Dictionary containing the generated content details
+        """
+        import uuid
+        from datetime import datetime
+        
+        request = ContentRequest(
+            keywords=[keyword],
+            industry=industry,
+            audience=audience,
+            content_type="article",
+            language=language,
+            brand_materials=brand_materials,
+            tone=tone,
+            length=length
+        )
+        
+        # Generate the content
+        content = await self.generate_content(request)
+        
+        result = {
+            "content_id": str(uuid.uuid4()),
+            "content": content,
+            "generated_at": datetime.now().isoformat()
+        }
+        
+        return result
+        
+    async def generate_platform_summary(self, content: str, platform: Any, language: str = "en", 
+                                       max_length: Optional[int] = None) -> PlatformSummary:
+        """Generate a platform-specific summary for the content.
+        
+        Args:
+            content: Original content to summarize
+            platform: Platform to generate summary for
+            language: Language for the summary
+            max_length: Maximum length of the summary in characters
+            
+        Returns:
+            Platform-specific summary
+        """
+        system_prompt = self._get_summary_system_prompt(language)
+        
+        user_prompt = f"""
+        Please create a platform-specific summary for the following content:
+        
+        Content: {content}
+        
+        Generate a summary for this platform: {platform}
+        
+        For the platform, provide:
+        1. Platform-specific content summary
+        2. Relevant hashtags (if applicable)
+        3. A prompt for generating an image for this content
+        
+        Format your response as a JSON object with 'platform', 'content', 'hashtags', and 'image_prompt' fields.
+        """
+        
+        if max_length:
+            user_prompt += f"\n\nThe summary should be no longer than {max_length} characters."
+        
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ]
+        
+        logger.info(f"Generating platform summary for {platform}")
+        response = await make_llm_api_call(
+            messages=messages,
+            model_name=self.llm_model,
+            temperature=0.7,
+            max_tokens=1000
+        )
+        
+        try:
+            summary_text = self._extract_content_from_response(response)
+            summary_json = json.loads(summary_text)
+            
+            return PlatformSummary(
+                platform=str(platform),
+                content=summary_json["content"],
+                hashtags=summary_json.get("hashtags"),
+                image_prompt=summary_json.get("image_prompt")
+            )
+        except Exception as e:
+            logger.error(f"Error parsing platform summary response: {e}")
+            return PlatformSummary(
+                platform=str(platform),
+                content=f"Summary for {platform}",
+                hashtags=["content", "marketing", "ai"],
+                image_prompt=f"An image representing content for {platform}"
+            )
     
     async def _generate_main_content(self, request: ContentRequest) -> Dict[str, Any]:
         """Generate the main SEO-optimized content.
