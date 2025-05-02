@@ -1,0 +1,12 @@
+{
+  "id": "1746155772_0807",
+  "sender": "feng@promora.ai",
+  "recipient": "feng@deeplink.cloud",
+  "cc": [],
+  "bcc": [],
+  "subject": "Promora 测试邮件",
+  "body_text": "这是一封来自 Promora 的测试邮件。\n\n此邮件用于测试邮件发送功能。",
+  "body_html": "\n        <html>\n        <body>\n            <h2>Promora 测试邮件</h2>\n            <p>这是一封来自 Promora 的测试邮件。</p>\n            <p>此邮件用于测试邮件发送功能。</p>\n            <hr>\n            <p><em>Promora - AI 驱动的虚拟首席市场官</em></p>\n        </body>\n        </html>\n        ",
+  "timestamp": "2025-05-02T03:16:12.655415",
+  "status": "sent"
+}
