@@ -83,9 +83,7 @@ async def analyze_image_with_gpt4_vision(
             "input": {
                 "text": prompt,
                 "image": f"data:image/jpeg;base64,{base64_image}"
-            },
-            "max_tokens": max_tokens,
-            "temperature": temperature
+            }
         }
         
         for attempt in range(MAX_RETRIES):
