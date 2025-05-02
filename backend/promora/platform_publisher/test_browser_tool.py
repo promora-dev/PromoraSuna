@@ -9,7 +9,7 @@ import asyncio
 import random
 from pathlib import Path
 from datetime import datetime
-from playwright.async_api import async_playwright, Browser, Page, Playwright
+from playwright.async_api import async_playwright, Browser, Page, Playwright, ElementHandle
 
 class TestBrowserTool:
     """用于测试的简化浏览器工具"""
@@ -107,16 +107,20 @@ class TestBrowserTool:
         """
         await self.page.fill(selector, text)
     
-    async def type(self, selector, text, delay=None):
+    async def type(self, selector, text=None, delay=None):
         """模拟人类输入文本
         
         Args:
-            selector: 要输入的元素选择器
+            selector: 要输入的元素选择器，如果为None则直接输入
             text: 要输入的文本
             delay: 每个字符之间的延迟（毫秒）
         """
-        delay = delay or random.uniform(50, 150)
-        await self.page.type(selector, text, delay=delay)
+        if text is None:
+            text = selector
+            await self.page.keyboard.type(text, delay=delay or random.uniform(50, 150))
+        else:
+            delay = delay or random.uniform(50, 150)
+            await self.page.type(selector, text, delay=delay)
     
     async def press(self, key):
         """按下键盘按键
@@ -186,3 +190,109 @@ class TestBrowserTool:
             return True
         except Exception:
             return False
+    
+    async def find_element(self, selector, timeout=None):
+        """查找元素
+        
+        Args:
+            selector: 要查找的元素选择器
+            timeout: 超时时间（毫秒）
+            
+        Returns:
+            找到的元素，如果未找到则返回None
+        """
+        timeout = timeout or self.timeout
+        try:
+            element = await self.page.wait_for_selector(selector, timeout=timeout)
+            return element
+        except Exception:
+            return None
+    
+    async def switch_to_frame(self, frame_element):
+        """切换到iframe
+        
+        Args:
+            frame_element: iframe元素
+        """
+        frame = await frame_element.content_frame()
+        if frame:
+            self.page = frame
+    
+    async def switch_to_default_content(self):
+        """切换回主框架"""
+        self.page = self.context.pages()[0]
+    
+    async def get_element_position(self, selector):
+        """获取元素位置
+        
+        Args:
+            selector: 要获取位置的元素选择器
+            
+        Returns:
+            元素位置的(x, y)坐标，如果未找到元素则返回None
+        """
+        element = await self.find_element(selector)
+        if not element:
+            return None
+        
+        box = await element.bounding_box()
+        if not box:
+            return None
+        
+        return (box["x"] + box["width"] / 2, box["y"] + box["height"] / 2)
+    
+    async def element_exists(self, selector, timeout=1000):
+        """检查元素是否存在
+        
+        Args:
+            selector: 要检查的元素选择器
+            timeout: 超时时间（毫秒）
+            
+        Returns:
+            如果元素存在则返回True，否则返回False
+        """
+        try:
+            await self.page.wait_for_selector(selector, timeout=timeout)
+            return True
+        except Exception:
+            return False
+    
+    async def screenshot_element(self, element, path=None):
+        """截取元素截图
+        
+        Args:
+            element: 要截图的元素
+            path: 截图保存路径
+            
+        Returns:
+            截图保存路径
+        """
+        if not path:
+            timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+            path = str(self.screenshot_dir / f"element_screenshot_{timestamp}.png")
+        
+        await element.screenshot(path=path)
+        return path
+    
+    async def scroll(self, direction="down", amount=100):
+        """滚动页面
+        
+        Args:
+            direction: 滚动方向，"up"或"down"
+            amount: 滚动量（像素）
+        """
+        if direction == "up":
+            amount = -amount
+        
+        await self.page.evaluate(f"window.scrollBy(0, {amount})")
+        await asyncio.sleep(random.uniform(0.1, 0.3))
+        
+    async def move_mouse(self, x, y):
+        """移动鼠标到指定位置
+        
+        Args:
+            x: X坐标
+            y: Y坐标
+        """
+        await self.page.mouse.move(x, y)
+        await asyncio.sleep(random.uniform(0.1, 0.2))
