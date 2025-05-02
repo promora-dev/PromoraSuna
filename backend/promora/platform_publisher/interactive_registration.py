@@ -26,7 +26,7 @@ from utils.logger import logger
 from .models import PlatformType, PlatformAccount
 from .email_client import EmailClient, EmailClientFactory
 from .verification_dialog import VerificationDialog
-from services.interactive_llm import InteractiveLLMGuidance
+from services.mock_vision_llm import mock_analyze_image_with_gpt4_vision as analyze_image_with_gpt4_vision
 
 
 class InteractiveRegistration:
@@ -70,10 +70,8 @@ class InteractiveRegistration:
                 provider=email_provider
             )
             
-        self.llm_guidance = InteractiveLLMGuidance(
-            api_key=api_key,
-            debug_dir=self.screenshot_dir
-        )
+        self.api_key = api_key
+        self.debug_dir = self.screenshot_dir
         
         self.verification_callback = verification_callback
         self.verification_dialog = None
@@ -221,14 +219,133 @@ class InteractiveRegistration:
             
         context = context or {}
         context["step"] = self.current_step
+        platform = context.get("platform", "unknown")
         
-        analysis = await self.llm_guidance.analyze_page(
-            screenshot_path=screenshot_path,
-            context=context
-        )
+        if platform == "x":
+            prompt = f"""
+            分析这个X（Twitter）注册页面的截图，当前步骤: {self.current_step}。
+            
+            请提供以下信息：
+            1. 页面类型（注册初始页面、个人信息页面、邮箱输入页面等）
+            2. 当前注册步骤
+            3. 页面上的主要元素（按钮、输入框、下拉菜单等）及其位置坐标
+            4. 推荐的下一步操作（点击、输入文本、选择选项等）
+            
+            以JSON格式返回结果，包含以下字段：
+            {{
+                "page_type": "页面类型描述",
+                "registration_step": "当前注册步骤",
+                "elements": [
+                    {{
+                        "type": "元素类型",
+                        "description": "元素描述",
+                        "coordinates": [x, y],
+                        "is_active": true/false
+                    }}
+                ],
+                "suggested_actions": [
+                    {{
+                        "type": "操作类型（click/type/select）",
+                        "target": "操作目标描述",
+                        "coordinates": [x, y],
+                        "value": "要输入的值（如果是type操作）"
+                    }}
+                ],
+                "next_step": "下一步描述"
+            }}
+            
+            注意：
+            1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+            2. 坐标值应该是页面上元素的中心位置
+            3. 只返回JSON格式的结果，不要有其他解释
+            """
+        else:
+            prompt = f"""
+            分析这个页面截图，当前步骤: {self.current_step}。
+            
+            请提供以下信息：
+            1. 页面类型
+            2. 当前操作步骤
+            3. 页面上的主要元素及其位置坐标
+            4. 推荐的下一步操作
+            
+            以JSON格式返回结果，包含以下字段：
+            {{
+                "page_type": "页面类型描述",
+                "current_step": "当前操作步骤",
+                "elements": [
+                    {{
+                        "type": "元素类型",
+                        "description": "元素描述",
+                        "coordinates": [x, y],
+                        "is_active": true/false
+                    }}
+                ],
+                "suggested_actions": [
+                    {{
+                        "type": "操作类型（click/type/select）",
+                        "target": "操作目标描述",
+                        "coordinates": [x, y],
+                        "value": "要输入的值（如果是type操作）"
+                    }}
+                ],
+                "next_step": "下一步描述"
+            }}
+            """
         
-        logger.debug(f"页面分析结果: {json.dumps(analysis, ensure_ascii=False)}")
-        return analysis
+        try:
+            result = await analyze_image_with_gpt4_vision(
+                image_path=screenshot_path,
+                prompt=prompt,
+                api_key=self.api_key
+            )
+            
+            if "output" in result and "text" in result["output"]:
+                content = result["output"]["text"]
+                
+                debug_path = os.path.join(self.debug_dir, f"page_analysis_{platform}_{self.current_step}_{os.path.basename(screenshot_path)}.json")
+                with open(debug_path, "w", encoding="utf-8") as f:
+                    json.dump({
+                        "prompt": prompt,
+                        "response": content
+                    }, f, ensure_ascii=False, indent=2)
+                
+                try:
+                    import re
+                    json_match = re.search(r'({.*})', content, re.DOTALL)
+                    if json_match:
+                        json_str = json_match.group(1)
+                        analysis = json.loads(json_str)
+                        analysis["success"] = True
+                        logger.debug(f"页面分析结果: {json.dumps(analysis, ensure_ascii=False)}")
+                        return analysis
+                    else:
+                        logger.warning(f"无法从响应中提取JSON: {content}")
+                        return {
+                            "success": False,
+                            "error": "无法从响应中提取JSON",
+                            "raw_response": content
+                        }
+                except json.JSONDecodeError as e:
+                    logger.warning(f"JSON解析错误: {e}")
+                    return {
+                        "success": False,
+                        "error": f"JSON解析错误: {e}",
+                        "raw_response": content
+                    }
+            else:
+                logger.warning("API响应格式不正确")
+                return {
+                    "success": False,
+                    "error": "API响应格式不正确",
+                    "raw_response": str(result)
+                }
+        except Exception as e:
+            logger.error(f"分析页面时出错: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
     
     async def _execute_suggested_actions(self, actions: List[Dict[str, Any]]) -> bool:
         """执行LLM建议的操作
@@ -312,8 +429,7 @@ class InteractiveRegistration:
             
         screenshot_path = await self._take_screenshot(f"{platform}_verification_check")
         
-        analysis = await self.llm_guidance.analyze_page(
-            screenshot_path=screenshot_path,
+        analysis = await self._analyze_current_page(
             context={
                 "platform": platform,
                 "step": self.current_step,
