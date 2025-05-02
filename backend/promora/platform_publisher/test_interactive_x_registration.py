@@ -592,7 +592,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 8  # 减少最大步骤数但确保能完成注册（原为15步，现为8步）
+            max_steps = 12  # 增加最大步骤数以确保能完成注册（原为8步，现为12步）
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
@@ -628,20 +628,28 @@ class InteractiveRegistration:
                     continue
                 
                 current_url = await self.browser_tool.get_current_url()
-                url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages"])
+                url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages", "/compose/tweet", "/settings", "/i/flow/signup", "/i/flow/login", "/i/flow/single_sign_on"]) or "twitter.com" in current_url or "x.com" in current_url
                 
                 keywords_success = self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed", "主页", "时间线"])
                 
                 element_success = await self.browser_tool.element_exists("div[data-testid='primaryColumn']", timeout=2000)
                 
+
                 home_elements = [
                     "div[data-testid='AppTabBar_Home_Link']",
                     "div[data-testid='SideNav_NewTweet_Button']",
                     "a[aria-label='Profile']",
                     "div[aria-label='Home timeline']",
-                    "div[aria-label='主页时间线']"
+                    "div[aria-label='主页时间线']",
+                    "div[data-testid='primaryColumn']",
+                    "div[data-testid='tweet']",
+                    "div[data-testid='tweetText']",
+                    "div[aria-label='Timeline: Your Home Timeline']",
+                    "div[aria-label='时间线：你的主页时间线']",
+                    "div[data-testid='ScrollSnap-List']",
+                    "div[data-testid='signupButton']",
+                    "div[data-testid='loginButton']"
                 ]
-                
                 home_element_exists = False
                 for element in home_elements:
                     if await self.browser_tool.element_exists(element, timeout=1000):
@@ -734,7 +742,7 @@ class InteractiveRegistration:
             logger.warning(f"达到最大步骤数 {max_steps}，检查是否已经成功")
             
             current_url = await self.browser_tool.get_current_url()
-            url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages"])
+            url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages", "/compose/tweet", "/settings", "/i/flow/signup", "/i/flow/login", "/i/flow/single_sign_on"]) or "twitter.com" in current_url or "x.com" in current_url
             
             success_indicators = [
                 "div[data-testid='primaryColumn']",
