@@ -79,25 +79,11 @@ async def analyze_image_with_gpt4_vision(
         }
         
         payload = {
-            "model": "gpt-4-vision-preview",  # 使用GPT-4 Vision API
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}",
-                                "detail": detail_level
-                            }
-                        }
-                    ]
-                }
-            ],
+            "model": "gpt-4.1",  # 使用GPT-4.1 API
+            "input": {
+                "text": prompt,
+                "image": f"data:image/jpeg;base64,{base64_image}"
+            },
             "max_tokens": max_tokens,
             "temperature": temperature
         }
@@ -108,17 +94,17 @@ async def analyze_image_with_gpt4_vision(
                 
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
-                        "https://api.openai.com/v1/chat/completions",
+                        "https://api.openai.com/v1/responses",
                         headers=headers,
                         json=payload
                     ) as response:
                         if response.status == 200:
                             result = await response.json()
-                            logger.debug("Successfully received GPT-4o Vision API response")
+                            logger.debug("Successfully received GPT-4.1 API response")
                             return result
                         else:
                             error_text = await response.text()
-                            logger.warning(f"GPT-4o Vision API error (status {response.status}): {error_text}")
+                            logger.warning(f"GPT-4.1 API error (status {response.status}): {error_text}")
                             
                             if response.status == 429:  # Rate limit
                                 logger.warning(f"Rate limit hit, waiting {RATE_LIMIT_DELAY} seconds")
@@ -186,8 +172,8 @@ async def detect_button_in_image(
             temperature=0.2  # Lower temperature for more deterministic results
         )
         
-        if "choices" in result and len(result["choices"]) > 0:
-            content = result["choices"][0]["message"]["content"]
+        if "output" in result and "text" in result["output"]:
+            content = result["output"]["text"]
             
             import json
             import re
@@ -209,10 +195,10 @@ async def detect_button_in_image(
                 "raw_response": content
             }
         else:
-            logger.warning("No choices in GPT-4o Vision API response")
+            logger.warning("No output.text in GPT-4.1 API response")
             return {
                 "found": False,
-                "error": "No response from GPT-4o Vision API"
+                "error": "No response from GPT-4.1 API"
             }
     except Exception as e:
         logger.error(f"Error in detect_button_in_image: {str(e)}")
