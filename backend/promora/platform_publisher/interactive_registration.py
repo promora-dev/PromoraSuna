@@ -250,24 +250,45 @@ class InteractiveRegistration:
             logger.error(f"截取截图时出错: {e}")
             return None
     
-    def _build_prompt(self, platform: str, step: int) -> str:
+    def _build_prompt(self, platform: str, step: int, context: Dict[str, Any] = None) -> str:
         """构建LLM分析提示词
         
         Args:
             platform: 平台名称
             step: 当前步骤
+            context: 上下文信息，包含注册信息等
             
         Returns:
             提示词
         """
+        context = context or {}
+        
+        username = context.get("username", "")
+        email = context.get("email", "")
+        display_name = context.get("display_name", "")
+        password = context.get("password", "")
+        
+        registration_info = ""
+        if username or email or display_name or password:
+            registration_info = f"""
+我需要注册一个账号，以下是我的注册信息：
+- 用户名: {username}
+- 显示名称: {display_name}
+- 邮箱: {email}
+- 密码: {password}
+
+请根据截图内容和我提供的注册信息，给出精确的操作指导。
+"""
+
         base_prompt = f"""
 分析这个页面截图，当前步骤: {step}。
+{registration_info}
 
 请提供以下信息：
 1. 页面类型
 2. 当前操作步骤
 3. 页面上的主要元素及其位置坐标
-4. 推荐的下一步操作
+4. 推荐的下一步操作，包括精确的操作顺序和每步操作之间的时间间隔
 
 以JSON格式返回结果，包含以下字段：
 {{
@@ -286,27 +307,36 @@ class InteractiveRegistration:
             "type": "操作类型（click/type/select等）",
             "target": "操作目标描述",
             "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）"
+            "value": "要输入的值（如果是type操作）",
+            "duration": 操作间隔时间（秒）
         }}
     ],
-    "next_step": "下一步描述"
+    "next_step": "下一步描述",
+    "human_simulation": {{
+        "typing_speed": "正常/快速/缓慢",
+        "mouse_movement": "直接/曲线/犹豫",
+        "overall_pace": "快速/正常/谨慎"
+    }}
 }}
 
 注意：
 1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
 2. 坐标值应该是页面上元素的中心位置
 3. 只返回JSON格式的结果，不要有其他解释
+4. 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
+5. 对于输入操作，考虑真实人类的打字速度和可能的错误修正
 """
 
         if platform == "x":
             return f"""
 分析这个X（Twitter）注册页面的截图，当前步骤: {step}。
+{registration_info}
 
 请提供以下信息：
 1. 页面类型（注册初始页面、个人信息页面、邮箱输入页面等）
 2. 当前注册步骤
 3. 页面上的主要元素（按钮、输入框、下拉菜单等）及其位置坐标
-4. 推荐的下一步操作（点击、输入文本、选择选项等）
+4. 推荐的下一步操作（点击、输入文本、选择选项等），包括精确的操作顺序和每步操作之间的时间间隔
 
 以JSON格式返回结果，包含以下字段：
 {{
@@ -325,10 +355,16 @@ class InteractiveRegistration:
             "type": "操作类型（click/type/select等）",
             "target": "操作目标描述",
             "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）"
+            "value": "要输入的值（如果是type操作）",
+            "duration": 操作间隔时间（秒）
         }}
     ],
-    "next_step": "下一步描述"
+    "next_step": "下一步描述",
+    "human_simulation": {{
+        "typing_speed": "正常/快速/缓慢",
+        "mouse_movement": "直接/曲线/犹豫",
+        "overall_pace": "快速/正常/谨慎"
+    }}
 }}
 
 注意：
@@ -337,16 +373,20 @@ class InteractiveRegistration:
 3. 只返回JSON格式的结果，不要有其他解释
 4. 如果看到"Use email instead"按钮，请将其作为第一个建议操作
 5. 对于生日选择，请确保年份在2000年之前，避免年龄限制问题
+6. 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
+7. 对于输入操作，考虑真实人类的打字速度和可能的错误修正
+8. 如果是输入名称字段，请只使用显示名称，不要混入邮箱或其他信息
 """
         elif platform == "zhihu":
             return f"""
 分析这个知乎注册/登录页面的截图，当前步骤: {step}。
+{registration_info}
 
 请提供以下信息：
 1. 页面类型（注册页面、登录页面、验证码页面等）
 2. 当前操作步骤
 3. 页面上的主要元素（按钮、输入框、验证码等）及其位置坐标
-4. 推荐的下一步操作（点击、输入文本、拖动滑块等）
+4. 推荐的下一步操作（点击、输入文本、拖动滑块等），包括精确的操作顺序和每步操作之间的时间间隔
 
 以JSON格式返回结果，包含以下字段：
 {{
@@ -365,10 +405,16 @@ class InteractiveRegistration:
             "type": "操作类型（click/type/drag等）",
             "target": "操作目标描述",
             "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）"
+            "value": "要输入的值（如果是type操作）",
+            "duration": 操作间隔时间（秒）
         }}
     ],
-    "next_step": "下一步描述"
+    "next_step": "下一步描述",
+    "human_simulation": {{
+        "typing_speed": "正常/快速/缓慢",
+        "mouse_movement": "直接/曲线/犹豫",
+        "overall_pace": "快速/正常/谨慎"
+    }}
 }}
 
 注意：
@@ -376,6 +422,8 @@ class InteractiveRegistration:
 2. 坐标值应该是页面上元素的中心位置
 3. 只返回JSON格式的结果，不要有其他解释
 4. 如果看到滑动验证码，请提供滑块起始坐标和目标坐标
+5. 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
+6. 对于输入操作，考虑真实人类的打字速度和可能的错误修正
 """
         
         return base_prompt
@@ -401,7 +449,7 @@ class InteractiveRegistration:
                 "error": "无法截取截图"
             }
         
-        prompt = self._build_prompt(platform, self.current_step)
+        prompt = self._build_prompt(platform, self.current_step, context)
         
         try:
             result = await analyze_image_with_gpt4_vision(
@@ -646,6 +694,7 @@ class InteractiveRegistration:
             "task": "注册X账户",
             "username": username,
             "email": email,
+            "password": password,  # 添加密码到上下文
             "display_name": display_name
         }
         
