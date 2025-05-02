@@ -80,8 +80,12 @@ class InteractiveLLMGuidance:
                 api_key=self.api_key
             )
             
-            if "output" in result and "text" in result["output"]:
-                content = result["output"]["text"]
+            if "output" in result and isinstance(result["output"], list) and len(result["output"]) > 0:
+                output_item = result["output"][0]
+                if "content" in output_item and isinstance(output_item["content"], list) and len(output_item["content"]) > 0:
+                    content_item = output_item["content"][0]
+                    if "text" in content_item:
+                        content = content_item["text"]
                 
                 debug_path = os.path.join(self.debug_dir, f"page_analysis_{platform}_{step}_{os.path.basename(screenshot_path)}.json")
                 with open(debug_path, "w", encoding="utf-8") as f:
@@ -208,8 +212,12 @@ class InteractiveLLMGuidance:
                 api_key=self.api_key
             )
             
-            if "output" in result and "text" in result["output"]:
-                content = result["output"]["text"]
+            if "output" in result and isinstance(result["output"], list) and len(result["output"]) > 0:
+                output_item = result["output"][0]
+                if "content" in output_item and isinstance(output_item["content"], list) and len(output_item["content"]) > 0:
+                    content_item = output_item["content"][0]
+                    if "text" in content_item:
+                        content = content_item["text"]
                 
                 debug_path = os.path.join(self.debug_dir, f"element_analysis_{platform}_{element_description.replace(' ', '_')}_{os.path.basename(screenshot_path)}.json")
                 with open(debug_path, "w", encoding="utf-8") as f:
