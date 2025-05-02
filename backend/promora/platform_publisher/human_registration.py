@@ -8,6 +8,7 @@ with human-like behavior to avoid detection as automated processes.
 import asyncio
 import random
 import time
+import os
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
@@ -20,16 +21,23 @@ except ImportError:
 
 from utils.logger import logger
 from .models import PlatformType, PlatformAccount
+from .email_client import EmailClient, EmailClientFactory
 
 
 class HumanRegistration:
     """Human-like registration for platform accounts."""
     
-    def __init__(self, browser_tool: Optional[SandboxBrowserTool] = None):
+    def __init__(self, browser_tool: Optional[SandboxBrowserTool] = None, 
+               email_address: Optional[str] = None, 
+               email_password: Optional[str] = None,
+               email_provider: str = "gmail"):
         """Initialize the human registration module.
         
         Args:
             browser_tool: Browser tool for browser-based registration
+            email_address: Email address for verification code retrieval
+            email_password: Password for the email account
+            email_provider: Email provider (gmail, outlook, yahoo, etc.)
         """
         self.browser_tool = browser_tool
         self.min_typing_delay = 0.05  # seconds
@@ -39,6 +47,18 @@ class HumanRegistration:
         self.min_page_load_delay = 1.0  # seconds
         self.max_page_load_delay = 3.0  # seconds
         self.screenshot_dir = "/tmp/promora_screenshots"
+        
+        self.email_address = email_address
+        self.email_password = email_password
+        self.email_provider = email_provider
+        self.email_client = None
+        
+        if email_address and email_password:
+            self.email_client = EmailClientFactory.create_client(
+                email_address=email_address,
+                password=email_password,
+                provider=email_provider
+            )
     
     async def _human_delay(self, min_delay: float = None, max_delay: float = None) -> None:
         """Simulate human delay between actions.
@@ -241,6 +261,127 @@ class HumanRegistration:
         
         logger.warning("Text CAPTCHA handling requires OCR integration, not fully implemented")
         return False
+        
+    async def _get_verification_code(self, platform: str, timeout_minutes: int = 10) -> Optional[str]:
+        """Get verification code from email for a specific platform.
+        
+        Args:
+            platform: Platform name (x, zhihu, linkedin, medium)
+            timeout_minutes: Maximum time to wait for verification code in minutes
+            
+        Returns:
+            Verification code if found, None otherwise
+        """
+        if not self.email_client:
+            logger.warning("Email client not available for verification code retrieval")
+            return None
+        
+        logger.info(f"Waiting for verification code for {platform}...")
+        
+        if not self.email_client.connected and not await asyncio.to_thread(self.email_client.connect):
+            logger.error("Failed to connect to email server")
+            return None
+        
+        try:
+            code = await asyncio.to_thread(
+                self.email_client.wait_for_verification_code,
+                platform,
+                timeout_minutes=timeout_minutes,
+                check_interval=10
+            )
+            
+            if code:
+                logger.info(f"Found verification code for {platform}: {code}")
+                return code
+            else:
+                logger.warning(f"No verification code found for {platform} after {timeout_minutes} minutes")
+                return None
+        except Exception as e:
+            logger.error(f"Error getting verification code: {str(e)}")
+            return None
+        finally:
+            await asyncio.to_thread(self.email_client.disconnect)
+            
+    async def _handle_verification_code(self, platform: str, input_selector: str, submit_selector: str = None) -> bool:
+        """Handle verification code input during registration.
+        
+        Args:
+            platform: Platform name (x, zhihu, linkedin, medium)
+            input_selector: Selector for the verification code input field
+            submit_selector: Selector for the submit button (optional)
+            
+        Returns:
+            True if verification code was successfully handled, False otherwise
+        """
+        if not self.browser_tool:
+            logger.error("Browser tool not available for verification code handling")
+            return False
+        
+        if not self.email_client:
+            logger.warning("Email client not available for verification code retrieval")
+            return False
+        
+        screenshot_path = f"{self.screenshot_dir}/{platform}_verification_before_{int(time.time())}.png"
+        await self.browser_tool.screenshot(screenshot_path)
+        
+        code = await self._get_verification_code(platform)
+        
+        if not code:
+            logger.warning(f"Failed to get verification code for {platform}")
+            return False
+        
+        await self._human_typing(code, input_selector)
+        await self._human_delay()
+        
+        if submit_selector:
+            await self._human_click(submit_selector)
+            await self._human_delay(1.0, 2.0)
+        
+        screenshot_path = f"{self.screenshot_dir}/{platform}_verification_after_{int(time.time())}.png"
+        await self.browser_tool.screenshot(screenshot_path)
+        
+        return True
+        
+    async def _handle_verification_link(self, platform: str) -> bool:
+        """Handle verification link during registration.
+        
+        Args:
+            platform: Platform name (x, zhihu, linkedin, medium)
+            
+        Returns:
+            True if verification link was successfully handled, False otherwise
+        """
+        if not self.browser_tool:
+            logger.error("Browser tool not available for verification link handling")
+            return False
+        
+        if not self.email_client:
+            logger.warning("Email client not available for verification link retrieval")
+            return False
+        
+        screenshot_path = f"{self.screenshot_dir}/{platform}_verification_link_before_{int(time.time())}.png"
+        await self.browser_tool.screenshot(screenshot_path)
+        
+        verification_link = await asyncio.to_thread(
+            self.email_client.get_verification_link,
+            platform,
+            timeout_minutes=10,
+            check_interval=10
+        )
+        
+        if not verification_link:
+            logger.warning(f"Failed to get verification link for {platform}")
+            return False
+        
+        logger.info(f"Found verification link for {platform}: {verification_link}")
+        
+        await self.browser_tool.navigate(verification_link)
+        await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
+        
+        screenshot_path = f"{self.screenshot_dir}/{platform}_verification_link_after_{int(time.time())}.png"
+        await self.browser_tool.screenshot(screenshot_path)
+        
+        return True
     
     async def register_x_account(self, username: str, email: str, password: str, display_name: str = None) -> Optional[PlatformAccount]:
         """Register a new X (Twitter) account with human-like behavior.
@@ -333,10 +474,31 @@ class HumanRegistration:
             
             verification_input = await self.browser_tool.find_element("input[name='verfication_code']")
             if verification_input:
-                logger.warning("Email/phone verification required, cannot complete automatically")
-                screenshot_path = f"{self.screenshot_dir}/x_verification_{int(time.time())}.png"
-                await self.browser_tool.screenshot(screenshot_path)
-                return None
+                logger.info("Email verification required, attempting to retrieve code...")
+                
+                if not self.email_client:
+                    logger.warning("Email client not available for verification code retrieval")
+                    screenshot_path = f"{self.screenshot_dir}/x_verification_{int(time.time())}.png"
+                    await self.browser_tool.screenshot(screenshot_path)
+                    return None
+                
+                verification_result = await self._handle_verification_code(
+                    platform="x",
+                    input_selector="input[name='verfication_code']",
+                    submit_selector="div[role='button']:has-text('Next')"
+                )
+                
+                if not verification_result:
+                    logger.info("Attempting to use verification link instead of code for X registration...")
+                    verification_link_result = await self._handle_verification_link(platform="x")
+                    
+                    if not verification_link_result:
+                        logger.warning("Failed to handle verification for X registration")
+                        screenshot_path = f"{self.screenshot_dir}/x_verification_failed_{int(time.time())}.png"
+                        await self.browser_tool.screenshot(screenshot_path)
+                        return None
+                
+                await self._human_delay(2.0, 4.0)
             
             captcha_result = await self._handle_captcha()
             if not captcha_result:
@@ -434,10 +596,31 @@ class HumanRegistration:
             
             verification_input = await self.browser_tool.find_element("input[placeholder*='验证码']")
             if verification_input:
-                logger.warning("Email/phone verification required, cannot complete automatically")
-                screenshot_path = f"{self.screenshot_dir}/zhihu_verification_{int(time.time())}.png"
-                await self.browser_tool.screenshot(screenshot_path)
-                return None
+                logger.info("Email verification required, attempting to retrieve code...")
+                
+                if not self.email_client:
+                    logger.warning("Email client not available for verification code retrieval")
+                    screenshot_path = f"{self.screenshot_dir}/zhihu_verification_{int(time.time())}.png"
+                    await self.browser_tool.screenshot(screenshot_path)
+                    return None
+                
+                verification_result = await self._handle_verification_code(
+                    platform="zhihu",
+                    input_selector="input[placeholder*='验证码']",
+                    submit_selector="button.SignFlow-submitButton"
+                )
+                
+                if not verification_result:
+                    logger.info("Attempting to use verification link instead of code for Zhihu registration...")
+                    verification_link_result = await self._handle_verification_link(platform="zhihu")
+                    
+                    if not verification_link_result:
+                        logger.warning("Failed to handle verification for Zhihu registration")
+                        screenshot_path = f"{self.screenshot_dir}/zhihu_verification_failed_{int(time.time())}.png"
+                        await self.browser_tool.screenshot(screenshot_path)
+                        return None
+                
+                await self._human_delay(2.0, 4.0)
             
             success_indicators = [
                 "div.AppHeader-profile",
@@ -541,10 +724,32 @@ class HumanRegistration:
             
             verification_message = await self.browser_tool.find_element("div:has-text('Check your inbox')")
             if verification_message:
-                logger.warning("Email verification required, cannot complete automatically")
-                screenshot_path = f"{self.screenshot_dir}/medium_verification_{int(time.time())}.png"
+                logger.info("Email verification required, attempting to retrieve code...")
+                
+                if not self.email_client:
+                    logger.warning("Email client not available for verification code retrieval")
+                    screenshot_path = f"{self.screenshot_dir}/medium_verification_{int(time.time())}.png"
+                    await self.browser_tool.screenshot(screenshot_path)
+                    return None
+                
+                verification_link = await asyncio.to_thread(
+                    self.email_client.get_verification_link,
+                    "medium",
+                    timeout_minutes=10,
+                    check_interval=10
+                )
+                
+                if not verification_link:
+                    logger.warning("Failed to get verification link for Medium registration")
+                    screenshot_path = f"{self.screenshot_dir}/medium_verification_failed_{int(time.time())}.png"
+                    await self.browser_tool.screenshot(screenshot_path)
+                    return None
+                
+                await self.browser_tool.navigate(verification_link)
+                await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
+                
+                screenshot_path = f"{self.screenshot_dir}/medium_verification_link_{int(time.time())}.png"
                 await self.browser_tool.screenshot(screenshot_path)
-                return None
             
             success_indicators = [
                 "a[aria-label='Your profile']",
@@ -667,10 +872,41 @@ class HumanRegistration:
             
             verification_message = await self.browser_tool.find_element("div:has-text('Verify your email')")
             if verification_message:
-                logger.warning("Email verification required, cannot complete automatically")
-                screenshot_path = f"{self.screenshot_dir}/linkedin_verification_{int(time.time())}.png"
-                await self.browser_tool.screenshot(screenshot_path)
-                return None
+                logger.info("Email verification required, attempting to retrieve code...")
+                
+                if not self.email_client:
+                    logger.warning("Email client not available for verification code retrieval")
+                    screenshot_path = f"{self.screenshot_dir}/linkedin_verification_{int(time.time())}.png"
+                    await self.browser_tool.screenshot(screenshot_path)
+                    return None
+                
+                verification_result = await self._handle_verification_code(
+                    platform="linkedin",
+                    input_selector="input[name='verification-code']",
+                    submit_selector="button:has-text('Submit')"
+                )
+                
+                if not verification_result:
+                    verification_link = await asyncio.to_thread(
+                        self.email_client.get_verification_link,
+                        "linkedin",
+                        timeout_minutes=10,
+                        check_interval=10
+                    )
+                    
+                    if verification_link:
+                        await self.browser_tool.navigate(verification_link)
+                        await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
+                        
+                        screenshot_path = f"{self.screenshot_dir}/linkedin_verification_link_{int(time.time())}.png"
+                        await self.browser_tool.screenshot(screenshot_path)
+                    else:
+                        logger.warning("Failed to handle verification for LinkedIn registration")
+                        screenshot_path = f"{self.screenshot_dir}/linkedin_verification_failed_{int(time.time())}.png"
+                        await self.browser_tool.screenshot(screenshot_path)
+                        return None
+                
+                await self._human_delay(2.0, 4.0)
             
             success_indicators = [
                 "div.feed-identity-module",

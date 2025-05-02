@@ -63,7 +63,27 @@ def get_platform_publisher():
 def get_human_registration():
     try:
         from agent.tools.sb_browser_tool import SandboxBrowserTool
-        return HumanRegistration(None)
+        browser_tool = SandboxBrowserTool()
+        
+        from ..platform_publisher.email_client import EmailClientFactory
+        import os
+        
+        email_address = os.getenv("EMAIL_ADDRESS")
+        email_password = os.getenv("EMAIL_PASSWORD")
+        email_provider = os.getenv("EMAIL_PROVIDER", "gmail")
+        
+        email_client = None
+        if email_address and email_password:
+            email_client = EmailClientFactory.create_client(
+                email_address=email_address,
+                password=email_password,
+                provider=email_provider
+            )
+            if not email_client.connect():
+                logger.warning("Failed to connect to email server")
+                email_client = None
+        
+        return HumanRegistration(browser_tool, email_client=email_client)
     except Exception as e:
         logger.warning(f"Could not initialize SandboxBrowserTool: {e}")
         return HumanRegistration()
@@ -134,10 +154,29 @@ async def human_register_x_account(
     email: str,
     password: str,
     display_name: Optional[str] = None,
+    verification_email: Optional[str] = None,
+    verification_email_password: Optional[str] = None,
+    verification_email_provider: Optional[str] = "gmail",
     human_registration: HumanRegistration = Depends(get_human_registration)
 ):
     """Register an X account with human-like behavior."""
     try:
+        email_client = None
+        if verification_email and verification_email_password:
+            from ..platform_publisher.email_client import EmailClientFactory
+            email_client = EmailClientFactory.create_client(
+                email_address=verification_email,
+                password=verification_email_password,
+                provider=verification_email_provider
+            )
+            if not email_client.connect():
+                logger.warning("Failed to connect to email server with provided credentials")
+                email_client = None
+        
+        # Use the provided email client or the default one from HumanRegistration
+        if email_client:
+            human_registration.email_client = email_client
+        
         account = await human_registration.register_x_account(
             username=username,
             email=email,
@@ -169,10 +208,29 @@ async def human_register_zhihu_account(
     email: str,
     password: str,
     display_name: Optional[str] = None,
+    verification_email: Optional[str] = None,
+    verification_email_password: Optional[str] = None,
+    verification_email_provider: Optional[str] = "gmail",
     human_registration: HumanRegistration = Depends(get_human_registration)
 ):
     """Register a Zhihu account with human-like behavior."""
     try:
+        email_client = None
+        if verification_email and verification_email_password:
+            from ..platform_publisher.email_client import EmailClientFactory
+            email_client = EmailClientFactory.create_client(
+                email_address=verification_email,
+                password=verification_email_password,
+                provider=verification_email_provider
+            )
+            if not email_client.connect():
+                logger.warning("Failed to connect to email server with provided credentials")
+                email_client = None
+        
+        # Use the provided email client or the default one from HumanRegistration
+        if email_client:
+            human_registration.email_client = email_client
+        
         account = await human_registration.register_zhihu_account(
             username=username,
             email=email,
@@ -204,10 +262,29 @@ async def human_register_medium_account(
     email: str,
     password: str,
     display_name: Optional[str] = None,
+    verification_email: Optional[str] = None,
+    verification_email_password: Optional[str] = None,
+    verification_email_provider: Optional[str] = "gmail",
     human_registration: HumanRegistration = Depends(get_human_registration)
 ):
     """Register a Medium account with human-like behavior."""
     try:
+        email_client = None
+        if verification_email and verification_email_password:
+            from ..platform_publisher.email_client import EmailClientFactory
+            email_client = EmailClientFactory.create_client(
+                email_address=verification_email,
+                password=verification_email_password,
+                provider=verification_email_provider
+            )
+            if not email_client.connect():
+                logger.warning("Failed to connect to email server with provided credentials")
+                email_client = None
+        
+        # Use the provided email client or the default one from HumanRegistration
+        if email_client:
+            human_registration.email_client = email_client
+        
         account = await human_registration.register_medium_account(
             username=username,
             email=email,
@@ -241,10 +318,29 @@ async def human_register_linkedin_account(
     display_name: Optional[str] = None,
     first_name: Optional[str] = None,
     last_name: Optional[str] = None,
+    verification_email: Optional[str] = None,
+    verification_email_password: Optional[str] = None,
+    verification_email_provider: Optional[str] = "gmail",
     human_registration: HumanRegistration = Depends(get_human_registration)
 ):
     """Register a LinkedIn account with human-like behavior."""
     try:
+        email_client = None
+        if verification_email and verification_email_password:
+            from ..platform_publisher.email_client import EmailClientFactory
+            email_client = EmailClientFactory.create_client(
+                email_address=verification_email,
+                password=verification_email_password,
+                provider=verification_email_provider
+            )
+            if not email_client.connect():
+                logger.warning("Failed to connect to email server with provided credentials")
+                email_client = None
+        
+        # Use the provided email client or the default one from HumanRegistration
+        if email_client:
+            human_registration.email_client = email_client
+        
         account = await human_registration.register_linkedin_account(
             username=username,
             email=email,
