@@ -1,0 +1,32 @@
+{
+  "zhihu": {
+    "example_account": {
+      "username": "example@example.com",
+      "display_name": "Example User",
+      "auth_type": "credentials",
+      "auth_data": {
+        "username": "example@example.com",
+        "password": "your_password_here"
+      },
+      "last_used": null,
+      "usage_count": 0,
+      "status": "active"
+    }
+  },
+  "x": {
+    "example_account": {
+      "username": "example_user",
+      "display_name": "Example User",
+      "auth_type": "credentials",
+      "auth_data": {
+        "username": "example_user",
+        "password": "your_password_here"
+      },
+      "last_used": null,
+      "usage_count": 0,
+      "status": "active"
+    }
+  },
+  "linkedin": {},
+  "medium": {}
+}

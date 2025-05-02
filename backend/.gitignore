@@ -173,3 +173,6 @@ state.json
 
 # SQLite
 *.db
+
+# Sensitive files
+promora/platform_publisher/accounts.json

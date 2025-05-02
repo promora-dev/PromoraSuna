@@ -23,6 +23,7 @@ from .models import (
 )
 from .platform_adapters import (
     PlatformAdapter,
+    MockAdapter,
     XAdapter,
     LinkedInAdapter,
     MediumAdapter,
@@ -50,6 +51,10 @@ class PlatformPublisher:
         self.retry_queue: List[Tuple[str, PublishRequest]] = []
         self.max_retries = 3
         self.retry_delay = 60  # seconds
+        
+        from .account_manager import AccountManager
+        self.account_manager = AccountManager()
+        self._load_accounts()
     
     def register_account(self, account: PlatformAccount) -> None:
         """Register a platform account for publishing.
@@ -60,7 +65,7 @@ class PlatformPublisher:
         if self.browser_tool is None and account.platform in [PlatformType.ZHIHU]:
             logger.warning(f"Cannot register {account.platform} account without browser tool. Running in demo mode.")
             # Create a mock adapter that will simulate publishing
-            adapter = PlatformAdapter(account, None)
+            adapter = MockAdapter(account, None)
         else:
             if account.platform == PlatformType.X:
                 adapter = XAdapter(account, self.browser_tool)
@@ -82,6 +87,12 @@ class PlatformPublisher:
         Args:
             accounts: List of platform accounts to register
         """
+        for account in accounts:
+            self.register_account(account)
+    
+    def _load_accounts(self) -> None:
+        """Load accounts from the account manager."""
+        accounts = self.account_manager.get_accounts()
         for account in accounts:
             self.register_account(account)
     

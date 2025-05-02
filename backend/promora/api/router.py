@@ -9,9 +9,12 @@ from typing import Dict, List, Optional, Any
 import uuid
 from datetime import datetime
 
+from utils.logger import logger
+
 from ..content_generator.seo_generator import SEOContentGenerator
 from ..content_generator.models import ContentGenerationRequest, ContentGenerationResult, PlatformSummaryRequest
 from ..platform_publisher.publisher import PlatformPublisher
+from ..platform_publisher.human_registration import HumanRegistration
 from ..platform_publisher.models import (
     PublishRequest, 
     PublishResult, 
@@ -55,6 +58,15 @@ def get_content_generator():
 
 def get_platform_publisher():
     return PlatformPublisher()
+
+
+def get_human_registration():
+    try:
+        from agent.tools.sb_browser_tool import SandboxBrowserTool
+        return HumanRegistration(None)
+    except Exception as e:
+        logger.warning(f"Could not initialize SandboxBrowserTool: {e}")
+        return HumanRegistration()
 
 
 def get_task_scheduler():
@@ -112,6 +124,150 @@ async def register_account(
     try:
         platform_publisher.register_account(account)
         return {"success": True, "message": f"Account registered: {account.username}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@platform_router.post("/human-register/x", response_model=Dict[str, Any])
+async def human_register_x_account(
+    username: str,
+    email: str,
+    password: str,
+    display_name: Optional[str] = None,
+    human_registration: HumanRegistration = Depends(get_human_registration)
+):
+    """Register an X account with human-like behavior."""
+    try:
+        account = await human_registration.register_x_account(
+            username=username,
+            email=email,
+            password=password,
+            display_name=display_name
+        )
+        
+        if account:
+            platform_publisher = get_platform_publisher()
+            platform_publisher.register_account(account)
+            
+            return {
+                "success": True, 
+                "message": f"X account registered with human-like behavior: {username}",
+                "account": account.dict()
+            }
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Failed to register X account. Check logs for details."
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@platform_router.post("/human-register/zhihu", response_model=Dict[str, Any])
+async def human_register_zhihu_account(
+    username: str,
+    email: str,
+    password: str,
+    display_name: Optional[str] = None,
+    human_registration: HumanRegistration = Depends(get_human_registration)
+):
+    """Register a Zhihu account with human-like behavior."""
+    try:
+        account = await human_registration.register_zhihu_account(
+            username=username,
+            email=email,
+            password=password,
+            display_name=display_name
+        )
+        
+        if account:
+            platform_publisher = get_platform_publisher()
+            platform_publisher.register_account(account)
+            
+            return {
+                "success": True, 
+                "message": f"Zhihu account registered with human-like behavior: {username}",
+                "account": account.dict()
+            }
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Failed to register Zhihu account. Check logs for details."
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@platform_router.post("/human-register/medium", response_model=Dict[str, Any])
+async def human_register_medium_account(
+    username: str,
+    email: str,
+    password: str,
+    display_name: Optional[str] = None,
+    human_registration: HumanRegistration = Depends(get_human_registration)
+):
+    """Register a Medium account with human-like behavior."""
+    try:
+        account = await human_registration.register_medium_account(
+            username=username,
+            email=email,
+            password=password,
+            display_name=display_name
+        )
+        
+        if account:
+            platform_publisher = get_platform_publisher()
+            platform_publisher.register_account(account)
+            
+            return {
+                "success": True, 
+                "message": f"Medium account registered with human-like behavior: {username}",
+                "account": account.dict()
+            }
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Failed to register Medium account. Check logs for details."
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@platform_router.post("/human-register/linkedin", response_model=Dict[str, Any])
+async def human_register_linkedin_account(
+    username: str,
+    email: str,
+    password: str,
+    display_name: Optional[str] = None,
+    first_name: Optional[str] = None,
+    last_name: Optional[str] = None,
+    human_registration: HumanRegistration = Depends(get_human_registration)
+):
+    """Register a LinkedIn account with human-like behavior."""
+    try:
+        account = await human_registration.register_linkedin_account(
+            username=username,
+            email=email,
+            password=password,
+            display_name=display_name,
+            first_name=first_name,
+            last_name=last_name
+        )
+        
+        if account:
+            platform_publisher = get_platform_publisher()
+            platform_publisher.register_account(account)
+            
+            return {
+                "success": True, 
+                "message": f"LinkedIn account registered with human-like behavior: {username}",
+                "account": account.dict()
+            }
+        else:
+            raise HTTPException(
+                status_code=400, 
+                detail="Failed to register LinkedIn account. Check logs for details."
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
