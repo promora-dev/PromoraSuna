@@ -164,6 +164,58 @@ class HumanVerificationAssistant:
             logger.error(f"处理验证码时出错: {e}")
             return False
     
+    async def handle_email_verification(self, input_selector: str, timeout: int = 300) -> bool:
+        """处理邮箱验证码
+        
+        Args:
+            input_selector: 邮箱验证码输入框选择器
+            timeout: 超时时间（秒）
+            
+        Returns:
+            验证是否成功
+        """
+        try:
+            if not await self.browser_tool.is_visible(input_selector, timeout=5000):
+                logger.warning(f"邮箱验证码输入框不存在: {input_selector}")
+                return False
+            
+            success, result = await self.handle_verification(
+                verification_type="email",
+                verification_details={
+                    "input_selector": input_selector
+                },
+                timeout=timeout
+            )
+            
+            if success and "code" in result:
+                await self.browser_tool.fill(input_selector, result["code"])
+                await asyncio.sleep(random.uniform(0.5, 1.5))
+                
+                if "submit_selector" in result:
+                    await self.browser_tool.click(result["submit_selector"])
+                else:
+                    submit_selectors = [
+                        "//button[contains(text(), '确认') or contains(text(), '提交') or contains(text(), '验证')]",
+                        "//button[contains(@class, 'submit') or contains(@class, 'confirm')]",
+                        "//input[@type='submit']"
+                    ]
+                    
+                    for selector in submit_selectors:
+                        try:
+                            if await self.browser_tool.is_visible(selector, timeout=1000):
+                                await self.browser_tool.click(selector)
+                                break
+                        except Exception:
+                            continue
+                
+                await asyncio.sleep(random.uniform(2.0, 4.0))
+                return True
+            
+            return False
+        except Exception as e:
+            logger.error(f"处理邮箱验证码时出错: {e}")
+            return False
+            
     async def handle_sms_verification(self, input_selector: str, timeout: int = 300) -> bool:
         """处理短信验证码
         

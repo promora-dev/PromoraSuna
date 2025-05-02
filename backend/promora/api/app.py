@@ -19,7 +19,7 @@ from ..content_generator.seo_generator import SEOContentGenerator
 from ..platform_publisher.publisher import PlatformPublisher
 from ..task_scheduler.scheduler import TaskScheduler
 from ..analytics.analyzer import AnalyticsAnalyzer
-from .router import content_router, platform_router, task_router, analytics_router
+from .router import content_router, platform_router, task_router, analytics_router, verification_router
 from .router import get_content_generator, get_platform_publisher, get_task_scheduler, get_analytics_analyzer
 
 
@@ -65,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(platform_router)
     app.include_router(task_router)
     app.include_router(analytics_router)
+    app.include_router(verification_router)
     
     @app.get("/", response_model=Dict[str, Any])
     async def root():

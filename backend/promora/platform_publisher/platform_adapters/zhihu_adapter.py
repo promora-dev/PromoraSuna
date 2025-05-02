@@ -6,13 +6,16 @@ import uuid
 import json
 import asyncio
 import random
+import os
 from typing import Dict, Any, List, Optional
 from datetime import datetime
+from pathlib import Path
 
 import logging
 from typing import Any, Dict, List, Optional, Union
 from ..models import PublishRequest, PublishResult, PublishStatus, PlatformAccount
 from .base import PlatformAdapter
+from ..human_verification import HumanVerificationAssistant
 
 logger = logging.getLogger("agentpress")
 
@@ -20,16 +23,28 @@ logger = logging.getLogger("agentpress")
 class ZhihuAdapter(PlatformAdapter):
     """Adapter for publishing to Zhihu."""
     
-    def __init__(self, account: PlatformAccount, browser_tool: Optional[Any] = None):
+    def __init__(self, account: PlatformAccount, browser_tool: Optional[Any] = None, debug_dir: Optional[str] = None):
         """Initialize the Zhihu adapter.
         
         Args:
             account: Zhihu account to use for publishing
             browser_tool: Browser tool for browser-based publishing
+            debug_dir: Directory for debug information
         """
         super().__init__(account)
         self.browser_tool = browser_tool
         self.is_logged_in = False
+        self.debug_dir = Path(debug_dir) if debug_dir else Path("/tmp/promora_debug")
+        self.debug_dir.mkdir(exist_ok=True)
+        self.verification_assistant = None
+        
+        if self.browser_tool:
+            self.verification_assistant = HumanVerificationAssistant(
+                browser_tool=self.browser_tool,
+                platform="zhihu",
+                account_id=self.account.account_id,
+                debug_dir=str(self.debug_dir)
+            )
     
     async def publish(self, request: PublishRequest) -> PublishResult:
         """Publish content to Zhihu.
@@ -127,24 +142,44 @@ class ZhihuAdapter(PlatformAdapter):
             await asyncio.sleep(random.uniform(5.0, 8.0))
             screenshots.append(await self._take_screenshot("06_zhihu_after_login_click"))
             
+            verification_result = await self._handle_verification_challenges()
+            if verification_result:
+                self.is_logged_in = True
+                logger.info(f"成功登录知乎账户 {self.account.username}")
+                return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"登录知乎时发生错误: {e}")
+            return False
+            
+    async def _handle_verification_challenges(self) -> bool:
+        """处理验证挑战
+        
+        Returns:
+            验证是否成功处理
+        """
+        try:
             verification_selectors = [
-                ("//div[contains(@class, 'Captcha')]", "验证码"),
-                ("//input[contains(@placeholder, '验证码')]", "短信验证码输入框"),
-                ("//div[contains(@class, 'SignFlowInput-errorMask')]", "登录错误信息"),
-                ("//div[contains(@class, 'Login-challenge')]", "登录挑战"),
-                ("//div[contains(@class, 'Login-verifications')]", "登录验证"),
-                ("//div[contains(text(), '请完成下列验证')]", "验证请求"),
-                ("//div[contains(text(), '安全验证')]", "安全验证"),
-                ("//div[contains(@class, 'VerifyCodeInput')]", "验证码输入框"),
-                ("//div[contains(@class, 'VerificationCode')]", "验证码组件"),
-                ("//div[contains(@class, 'SignFlow-smsInputContainer')]", "短信验证码容器"),
-                ("//div[contains(@class, 'SignFlow-captchaContainer')]", "图形验证码容器"),
-                ("//button[contains(text(), '获取短信验证码')]", "获取短信验证码按钮"),
-                ("//div[contains(@class, 'SignFlow-accountInput-error')]", "账号输入错误"),
-                ("//div[contains(@class, 'SignFlow-passwordInput-error')]", "密码输入错误")
+                ("//div[contains(@class, 'Captcha')]", "验证码", "captcha"),
+                ("//input[contains(@placeholder, '验证码')]", "短信验证码输入框", "sms"),
+                ("//input[contains(@placeholder, '邮箱验证码')]", "邮箱验证码输入框", "email"),
+                ("//div[contains(@class, 'SignFlowInput-errorMask')]", "登录错误信息", "error"),
+                ("//div[contains(@class, 'Login-challenge')]", "登录挑战", "challenge"),
+                ("//div[contains(@class, 'Login-verifications')]", "登录验证", "verification"),
+                ("//div[contains(text(), '请完成下列验证')]", "验证请求", "verification_request"),
+                ("//div[contains(text(), '安全验证')]", "安全验证", "security_verification"),
+                ("//div[contains(@class, 'VerifyCodeInput')]", "验证码输入框", "code_input"),
+                ("//div[contains(@class, 'VerificationCode')]", "验证码组件", "verification_code"),
+                ("//div[contains(@class, 'SignFlow-smsInputContainer')]", "短信验证码容器", "sms_container"),
+                ("//div[contains(@class, 'SignFlow-captchaContainer')]", "图形验证码容器", "captcha_container"),
+                ("//button[contains(text(), '获取短信验证码')]", "获取短信验证码按钮", "get_sms_button"),
+                ("//div[contains(@class, 'SignFlow-accountInput-error')]", "账号输入错误", "account_error"),
+                ("//div[contains(@class, 'SignFlow-passwordInput-error')]", "密码输入错误", "password_error")
             ]
             
-            for selector, name in verification_selectors:
+            for selector, name, verification_type in verification_selectors:
                 try:
                     exists = await self.browser_tool.is_visible(selector, timeout=2000)
                     if exists:
@@ -153,7 +188,28 @@ class ZhihuAdapter(PlatformAdapter):
                             logger.warning(f"检测到{name}: {text_content}")
                         except Exception:
                             logger.warning(f"检测到{name}，需要人工处理")
-                        screenshots.append(await self._take_screenshot(f"verification_{name.replace(' ', '_')}"))
+                        
+                        await self._take_screenshot(f"verification_{name.replace(' ', '_')}")
+                        
+                        if self.verification_assistant:
+                            if verification_type == "captcha":
+                                return await self.verification_assistant.handle_captcha(selector, timeout=300)
+                            elif verification_type == "sms":
+                                return await self.verification_assistant.handle_sms_verification(selector, timeout=300)
+                            elif verification_type == "email":
+                                return await self.verification_assistant.handle_email_verification(selector, timeout=300)
+                            else:
+                                success, result = await self.verification_assistant.handle_verification(
+                                    verification_type=verification_type,
+                                    verification_details={
+                                        "selector": selector,
+                                        "name": name,
+                                        "text_content": text_content if 'text_content' in locals() else None
+                                    },
+                                    timeout=300
+                                )
+                                return success
+                        
                         return False
                 except Exception:
                     logger.debug(f"未检测到{name}")
@@ -169,7 +225,19 @@ class ZhihuAdapter(PlatformAdapter):
                 for text in verification_texts:
                     if text in page_content:
                         logger.warning(f"页面内容包含验证相关文本: {text}")
-                        screenshots.append(await self._take_screenshot(f"verification_text_{text}"))
+                        await self._take_screenshot(f"verification_text_{text}")
+                        
+                        if self.verification_assistant:
+                            success, result = await self.verification_assistant.handle_verification(
+                                verification_type="text_verification",
+                                verification_details={
+                                    "text": text,
+                                    "page_url": await self.browser_tool.get_current_url()
+                                },
+                                timeout=300
+                            )
+                            return success
+                        
                         return False
             except Exception as e:
                 logger.error(f"检查页面内容时出错: {e}")
@@ -191,9 +259,7 @@ class ZhihuAdapter(PlatformAdapter):
                         logger.info(f"尝试选择器: {selector}")
                         await self.browser_tool.wait_for_selector(selector, timeout=3000)
                         logger.info(f"选择器 {selector} 找到，登录成功")
-                        screenshots.append(await self._take_screenshot("09_zhihu_login_success"))
-                        self.is_logged_in = True
-                        logger.info(f"成功登录知乎账户 {self.account.username}")
+                        await self._take_screenshot("09_zhihu_login_success")
                         return True
                     except Exception as e:
                         logger.info(f"选择器 {selector} 未找到: {e}")
@@ -203,7 +269,7 @@ class ZhihuAdapter(PlatformAdapter):
                 
                 if "signin" not in current_url:
                     logger.info("URL已经不在登录页面，可能已登录成功")
-                    screenshots.append(await self._take_screenshot("10_zhihu_url_changed"))
+                    await self._take_screenshot("10_zhihu_url_changed")
                     
                     try:
                         logger.info("尝试访问首页以确认登录状态...")
@@ -214,8 +280,7 @@ class ZhihuAdapter(PlatformAdapter):
                             try:
                                 if await self.browser_tool.is_visible(selector, timeout=2000):
                                     logger.info(f"在首页找到登录元素: {selector}")
-                                    screenshots.append(await self._take_screenshot("zhihu_homepage_logged_in"))
-                                    self.is_logged_in = True
+                                    await self._take_screenshot("zhihu_homepage_logged_in")
                                     return True
                             except Exception:
                                 pass
@@ -223,16 +288,15 @@ class ZhihuAdapter(PlatformAdapter):
                         logger.error(f"访问首页确认登录状态时出错: {e}")
                 
                 logger.error("无法确认登录状态，登录可能失败")
-                screenshots.append(await self._take_screenshot("11_zhihu_login_failed"))
+                await self._take_screenshot("11_zhihu_login_failed")
                 return False
                 
             except Exception as e:
                 logger.error(f"验证登录失败: {e}")
-                screenshots.append(await self._take_screenshot("12_zhihu_login_verification_failed"))
+                await self._take_screenshot("12_zhihu_login_verification_failed")
                 return False
-            
         except Exception as e:
-            logger.error(f"登录知乎时发生错误: {e}")
+            logger.error(f"处理验证挑战时出错: {e}")
             return False
     
     async def _publish_via_browser(self, request_id: str, request: PublishRequest) -> PublishResult:

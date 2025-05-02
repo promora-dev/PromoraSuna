@@ -50,6 +50,7 @@ content_router = APIRouter(prefix="/content", tags=["content"])
 platform_router = APIRouter(prefix="/platform", tags=["platform"])
 task_router = APIRouter(prefix="/task", tags=["task"])
 analytics_router = APIRouter(prefix="/analytics", tags=["analytics"])
+verification_router = APIRouter(prefix="/verification", tags=["verification"])
 
 
 def get_content_generator():
