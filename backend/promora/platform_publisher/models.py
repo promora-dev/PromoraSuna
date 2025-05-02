@@ -18,6 +18,24 @@ class PublishStatus(str, Enum):
     RETRYING = "retrying"
 
 
+class SocialActionType(str, Enum):
+    """Types of social interactions."""
+    
+    LIKE = "like"
+    REPLY = "reply"
+    RETWEET = "retweet"
+    QUOTE = "quote"
+
+
+class SocialActionStatus(str, Enum):
+    """Status of a social interaction task."""
+    
+    PENDING = "pending"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class PlatformType(str, Enum):
     """Supported platform types."""
     
@@ -98,6 +116,84 @@ class PublishResult(BaseModel):
     screenshots: Optional[List[str]] = Field(
         default=None, 
         description="Screenshots of the publishing process"
+    )
+
+
+class SocialActionRequest(BaseModel):
+    """Request model for social interactions."""
+    
+    post_url: str = Field(
+        ..., 
+        description="URL of the post to interact with"
+    )
+    action_type: SocialActionType = Field(
+        ..., 
+        description="Type of social interaction"
+    )
+    platform: PlatformType = Field(
+        ..., 
+        description="Platform to interact with"
+    )
+    account_id: str = Field(
+        ..., 
+        description="ID of the account to use for the interaction"
+    )
+    content: Optional[str] = Field(
+        default=None, 
+        description="Content for reply or quote retweet"
+    )
+    hashtags: Optional[List[str]] = Field(
+        default=None, 
+        description="Hashtags to include in the reply or quote"
+    )
+    image_url: Optional[str] = Field(
+        default=None, 
+        description="URL of an image to include with the reply or quote"
+    )
+
+
+class SocialActionResult(BaseModel):
+    """Result model for social interactions."""
+    
+    request_id: str = Field(
+        ..., 
+        description="ID of the social action request"
+    )
+    action_type: SocialActionType = Field(
+        ..., 
+        description="Type of social interaction"
+    )
+    platform: PlatformType = Field(
+        ..., 
+        description="Platform interacted with"
+    )
+    account_id: str = Field(
+        ..., 
+        description="ID of the account used for the interaction"
+    )
+    status: SocialActionStatus = Field(
+        ..., 
+        description="Status of the social interaction task"
+    )
+    post_url: Optional[str] = Field(
+        default=None, 
+        description="URL of the original post"
+    )
+    result_url: Optional[str] = Field(
+        default=None, 
+        description="URL of the resulting post (for replies and quotes)"
+    )
+    error_message: Optional[str] = Field(
+        default=None, 
+        description="Error message (if failed)"
+    )
+    completed_at: Optional[datetime] = Field(
+        default=None, 
+        description="Time the interaction was completed"
+    )
+    screenshots: Optional[List[str]] = Field(
+        default=None, 
+        description="Screenshots of the interaction process"
     )
 
 

@@ -17,7 +17,11 @@ from ..platform_publisher.models import (
     PublishResult, 
     PlatformAccount, 
     PlatformType,
-    PublishStatus
+    PublishStatus,
+    SocialActionRequest,
+    SocialActionResult,
+    SocialActionType,
+    SocialActionStatus
 )
 from ..task_scheduler.scheduler import TaskScheduler
 from ..task_scheduler.models import (
@@ -159,6 +163,32 @@ async def get_platform_requirements(
     try:
         requirements = platform_publisher.get_all_platform_requirements()
         return requirements
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@platform_router.post("/social-action", response_model=SocialActionResult)
+async def social_action(
+    request: SocialActionRequest,
+    platform_publisher: PlatformPublisher = Depends(get_platform_publisher)
+):
+    """Perform a social interaction on a platform (like, reply, retweet, quote)."""
+    try:
+        result = await platform_publisher.social_action(request)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@platform_router.post("/social-action-multiple", response_model=Dict[str, SocialActionResult])
+async def social_action_multiple(
+    requests: List[SocialActionRequest],
+    platform_publisher: PlatformPublisher = Depends(get_platform_publisher)
+):
+    """Perform multiple social interactions on platforms."""
+    try:
+        results = await platform_publisher.social_action_to_multiple(requests)
+        return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

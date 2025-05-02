@@ -17,7 +17,10 @@ except ImportError:
     SandboxBrowserTool = Any  # Type alias for type hints
 
 from utils.logger import logger
-from .models import PublishRequest, PublishResult, PublishStatus, PlatformAccount, PlatformType
+from .models import (
+    PublishRequest, PublishResult, PublishStatus, PlatformAccount, PlatformType,
+    SocialActionRequest, SocialActionResult, SocialActionStatus, SocialActionType
+)
 from .platform_adapters import (
     PlatformAdapter,
     XAdapter,
@@ -256,3 +259,63 @@ class PlatformPublisher:
             PlatformType.MEDIUM: MediumAdapter.content_requirements(),
             PlatformType.ZHIHU: ZhihuAdapter.content_requirements()
         }
+    
+    async def social_action(self, request: SocialActionRequest) -> SocialActionResult:
+        """Perform a social interaction on a platform.
+        
+        Args:
+            request: Social action request with details
+            
+        Returns:
+            Result of the social interaction
+        """
+        if request.platform not in self.platform_adapters:
+            return SocialActionResult(
+                request_id=str(uuid.uuid4()),
+                action_type=request.action_type,
+                platform=request.platform,
+                account_id=request.account_id,
+                status=SocialActionStatus.FAILED,
+                post_url=request.post_url,
+                error_message=f"Unsupported platform: {request.platform}"
+            )
+        
+        if request.account_id not in self.platform_adapters[request.platform]:
+            return SocialActionResult(
+                request_id=str(uuid.uuid4()),
+                action_type=request.action_type,
+                platform=request.platform,
+                account_id=request.account_id,
+                status=SocialActionStatus.FAILED,
+                post_url=request.post_url,
+                error_message=f"Account not registered: {request.account_id}"
+            )
+        
+        adapter = self.platform_adapters[request.platform][request.account_id]
+        
+        if request.platform == PlatformType.X and hasattr(adapter, 'social_action'):
+            return await adapter.social_action(request)
+        else:
+            return SocialActionResult(
+                request_id=str(uuid.uuid4()),
+                action_type=request.action_type,
+                platform=request.platform,
+                account_id=request.account_id,
+                status=SocialActionStatus.FAILED,
+                post_url=request.post_url,
+                error_message=f"Platform {request.platform} does not support social actions"
+            )
+    
+    async def social_action_to_multiple(self, requests: List[SocialActionRequest]) -> Dict[str, SocialActionResult]:
+        """Perform social interactions on multiple platforms.
+        
+        Args:
+            requests: List of social action requests
+            
+        Returns:
+            Dictionary mapping request IDs to social action results
+        """
+        tasks = [self.social_action(request) for request in requests]
+        results = await asyncio.gather(*tasks)
+        
+        return {result.request_id: result for result in results}
