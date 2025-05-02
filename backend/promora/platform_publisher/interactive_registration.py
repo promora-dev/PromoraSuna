@@ -267,163 +267,206 @@ class InteractiveRegistration:
         email = context.get("email", "")
         display_name = context.get("display_name", "")
         password = context.get("password", "")
+        birth_year = context.get("birth_year", str(random.randint(1970, 2000)))
+        birth_month = context.get("birth_month", random.choice(["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]))
+        birth_day = context.get("birth_day", str(random.randint(1, 28)))
         
-        registration_info = ""
-        if username or email or display_name or password:
-            registration_info = f"""
-我需要注册一个账号，以下是我的注册信息：
-- 用户名: {username}
-- 显示名称: {display_name}
-- 邮箱: {email}
-- 密码: {password}
-
-请根据截图内容和我提供的注册信息，给出精确的操作指导。
+        registration_json = {
+            "username": username,
+            "email": email,
+            "password": password,
+            "display_name": display_name,
+            "birth_year": birth_year,
+            "birth_month": birth_month,
+            "birth_day": birth_day
+        }
+        
+        registration_info = f"""
+📋 用户提供的注册信息如下：
+{json.dumps(registration_json, ensure_ascii=False, indent=2)}
 """
 
         base_prompt = f"""
-分析这个页面截图，当前步骤: {step}。
+你是一位网页注册助手，任务是根据截图中的网页结构和用户提供的注册信息，制定一整套自动化注册操作流程。
+
+---
+
+📸 页面截图：你将看到的是一个注册页面的截图，当前步骤: {step}。
+
 {registration_info}
 
-请提供以下信息：
-1. 页面类型
-2. 当前操作步骤
-3. 页面上的主要元素及其位置坐标
-4. 推荐的下一步操作，包括精确的操作顺序和每步操作之间的时间间隔
+---
 
-以JSON格式返回结果，包含以下字段：
+请根据截图中呈现的页面结构、字段提示、按钮文本，分析并返回一个完整的 JSON 结构，描述应该如何填写和点击这些元素，模拟人类操作流程。
+
+输出格式如下：
+
 {{
-    "page_type": "页面类型描述",
-    "current_step": "当前操作步骤",
-    "elements": [
-        {{
-            "type": "元素类型（按钮/输入框/下拉菜单等）",
-            "description": "元素描述",
-            "coordinates": [x, y],
-            "is_active": true/false
-        }}
-    ],
-    "suggested_actions": [
-        {{
-            "type": "操作类型（click/type/select等）",
-            "target": "操作目标描述",
-            "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）",
-            "duration": 操作间隔时间（秒）
-        }}
-    ],
-    "next_step": "下一步描述",
-    "human_simulation": {{
-        "typing_speed": "正常/快速/缓慢",
-        "mouse_movement": "直接/曲线/犹豫",
-        "overall_pace": "快速/正常/谨慎"
+  "page_type": "页面类型，例如：填写信息页、生日选择页、验证码页",
+  "plan": [
+    {{
+      "step": 1,
+      "type": "click | type | select",
+      "description": "点击 Name 输入框",
+      "target_hint": "输入框上方或内部提示为 'Name' 或类似",
+      "coordinates": [120, 280],
+      "value": null
+    }},
+    {{
+      "step": 2,
+      "type": "type",
+      "description": "输入用户名",
+      "coordinates": [120, 280],
+      "value": "{username}"
+    }},
+    {{
+      "step": 3,
+      "type": "click",
+      "description": "点击 'Next' 按钮",
+      "coordinates": [500, 600],
+      "value": null
     }}
+  ],
+  "final_remark": "完成后应该跳转到验证码页面，等待验证码输入"
 }}
 
-注意：
-1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
-2. 坐标值应该是页面上元素的中心位置
-3. 只返回JSON格式的结果，不要有其他解释
-4. 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
-5. 对于输入操作，考虑真实人类的打字速度和可能的错误修正
+⚠️ 要求：
+- 按照用户输入内容合理匹配界面字段
+- 不遗漏任何用户输入需要填写的内容
+- 保证每个字段填写前先点击，再输入（模拟人类行为）
+- 所有坐标使用实际数字
+- 只返回 JSON，不要多余解释或 markdown
+- 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
+- 对于输入操作，考虑真实人类的打字速度和可能的错误修正
 """
 
         if platform == "x":
             return f"""
-分析这个X（Twitter）注册页面的截图，当前步骤: {step}。
+你是一位网页注册助手，任务是根据截图中的X（Twitter）注册页面结构和用户提供的注册信息，制定一整套自动化注册操作流程。
+
+---
+
+📸 页面截图：你将看到的是X（Twitter）注册页面的截图，当前步骤: {step}。
+
 {registration_info}
 
-请提供以下信息：
-1. 页面类型（注册初始页面、个人信息页面、邮箱输入页面等）
-2. 当前注册步骤
-3. 页面上的主要元素（按钮、输入框、下拉菜单等）及其位置坐标
-4. 推荐的下一步操作（点击、输入文本、选择选项等），包括精确的操作顺序和每步操作之间的时间间隔
+---
 
-以JSON格式返回结果，包含以下字段：
+请根据截图中呈现的页面结构、字段提示、按钮文本，分析并返回一个完整的 JSON 结构，描述应该如何填写和点击这些元素，模拟人类操作流程。
+
+输出格式如下：
+
 {{
-    "page_type": "页面类型描述",
-    "registration_step": "当前注册步骤",
-    "elements": [
-        {{
-            "type": "元素类型（按钮/输入框/下拉菜单等）",
-            "description": "元素描述",
-            "coordinates": [x, y],
-            "is_active": true/false
-        }}
-    ],
-    "suggested_actions": [
-        {{
-            "type": "操作类型（click/type/select等）",
-            "target": "操作目标描述",
-            "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）",
-            "duration": 操作间隔时间（秒）
-        }}
-    ],
-    "next_step": "下一步描述",
-    "human_simulation": {{
-        "typing_speed": "正常/快速/缓慢",
-        "mouse_movement": "直接/曲线/犹豫",
-        "overall_pace": "快速/正常/谨慎"
+  "page_type": "页面类型，例如：填写信息页、生日选择页、验证码页",
+  "plan": [
+    {{
+      "step": 1,
+      "type": "click | type | select",
+      "description": "点击 Name 输入框",
+      "target_hint": "输入框上方或内部提示为 'Name' 或类似",
+      "coordinates": [120, 280],
+      "value": null,
+      "duration": 0.8
+    }},
+    {{
+      "step": 2,
+      "type": "type",
+      "description": "输入用户名",
+      "coordinates": [120, 280],
+      "value": "{display_name}",
+      "duration": 1.2
+    }},
+    {{
+      "step": 3,
+      "type": "click",
+      "description": "点击 'Next' 按钮",
+      "coordinates": [500, 600],
+      "value": null,
+      "duration": 0.5
     }}
+  ],
+  "final_remark": "完成后应该跳转到验证码页面，等待验证码输入",
+  "human_simulation": {{
+    "typing_speed": "正常",
+    "mouse_movement": "自然",
+    "overall_pace": "正常"
+  }}
 }}
 
-注意：
-1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
-2. 坐标值应该是页面上元素的中心位置
-3. 只返回JSON格式的结果，不要有其他解释
-4. 如果看到"Use email instead"按钮，请将其作为第一个建议操作
-5. 对于生日选择，请确保年份在2000年之前，避免年龄限制问题
-6. 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
-7. 对于输入操作，考虑真实人类的打字速度和可能的错误修正
-8. 如果是输入名称字段，请只使用显示名称，不要混入邮箱或其他信息
+⚠️ 要求：
+- 按照用户输入内容合理匹配界面字段
+- 不遗漏任何用户输入需要填写的内容
+- 保证每个字段填写前先点击，再输入（模拟人类行为）
+- 所有坐标使用实际数字
+- 只返回 JSON，不要多余解释或 markdown
+- 如果看到"Use email instead"按钮，请将其作为第一个步骤
+- 对于生日选择，请确保年份在2000年之前，避免年龄限制问题
+- 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
+- 对于输入操作，考虑真实人类的打字速度和可能的错误修正
+- 如果是输入名称字段，请只使用显示名称，不要混入邮箱或其他信息
 """
         elif platform == "zhihu":
             return f"""
-分析这个知乎注册/登录页面的截图，当前步骤: {step}。
+你是一位网页注册助手，任务是根据截图中的知乎注册/登录页面结构和用户提供的注册信息，制定一整套自动化注册操作流程。
+
+---
+
+📸 页面截图：你将看到的是知乎注册/登录页面的截图，当前步骤: {step}。
+
 {registration_info}
 
-请提供以下信息：
-1. 页面类型（注册页面、登录页面、验证码页面等）
-2. 当前操作步骤
-3. 页面上的主要元素（按钮、输入框、验证码等）及其位置坐标
-4. 推荐的下一步操作（点击、输入文本、拖动滑块等），包括精确的操作顺序和每步操作之间的时间间隔
+---
 
-以JSON格式返回结果，包含以下字段：
+请根据截图中呈现的页面结构、字段提示、按钮文本，分析并返回一个完整的 JSON 结构，描述应该如何填写和点击这些元素，模拟人类操作流程。
+
+输出格式如下：
+
 {{
-    "page_type": "页面类型描述",
-    "current_step": "当前操作步骤",
-    "elements": [
-        {{
-            "type": "元素类型（按钮/输入框/滑块等）",
-            "description": "元素描述",
-            "coordinates": [x, y],
-            "is_active": true/false
-        }}
-    ],
-    "suggested_actions": [
-        {{
-            "type": "操作类型（click/type/drag等）",
-            "target": "操作目标描述",
-            "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）",
-            "duration": 操作间隔时间（秒）
-        }}
-    ],
-    "next_step": "下一步描述",
-    "human_simulation": {{
-        "typing_speed": "正常/快速/缓慢",
-        "mouse_movement": "直接/曲线/犹豫",
-        "overall_pace": "快速/正常/谨慎"
+  "page_type": "页面类型，例如：登录页、注册页、验证码页",
+  "plan": [
+    {{
+      "step": 1,
+      "type": "click | type | select | drag",
+      "description": "点击手机号输入框",
+      "target_hint": "输入框上方或内部提示为'手机号'或类似",
+      "coordinates": [120, 280],
+      "value": null,
+      "duration": 0.8
+    }},
+    {{
+      "step": 2,
+      "type": "type",
+      "description": "输入手机号",
+      "coordinates": [120, 280],
+      "value": "{email}",
+      "duration": 1.2
+    }},
+    {{
+      "step": 3,
+      "type": "click",
+      "description": "点击'获取验证码'按钮",
+      "coordinates": [500, 600],
+      "value": null,
+      "duration": 0.5
     }}
+  ],
+  "final_remark": "完成后应该等待验证码",
+  "human_simulation": {{
+    "typing_speed": "正常",
+    "mouse_movement": "自然",
+    "overall_pace": "正常"
+  }}
 }}
 
-注意：
-1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
-2. 坐标值应该是页面上元素的中心位置
-3. 只返回JSON格式的结果，不要有其他解释
-4. 如果看到滑动验证码，请提供滑块起始坐标和目标坐标
-5. 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
-6. 对于输入操作，考虑真实人类的打字速度和可能的错误修正
+⚠️ 要求：
+- 按照用户输入内容合理匹配界面字段
+- 不遗漏任何用户输入需要填写的内容
+- 保证每个字段填写前先点击，再输入（模拟人类行为）
+- 所有坐标使用实际数字
+- 只返回 JSON，不要多余解释或 markdown
+- 如果看到滑动验证码，请提供滑块起始坐标和目标坐标
+- 操作间隔时间应该模拟真实人类行为，避免机械固定的间隔
+- 对于输入操作，考虑真实人类的打字速度和可能的错误修正
 """
         
         return base_prompt
@@ -509,7 +552,7 @@ class InteractiveRegistration:
         """执行LLM建议的操作
         
         Args:
-            actions: 操作列表
+            actions: 操作列表（可以是旧格式的suggested_actions或新格式的plan）
             
         Returns:
             是否成功执行所有操作
@@ -517,15 +560,18 @@ class InteractiveRegistration:
         if not actions:
             logger.warning("没有建议的操作")
             return False
-            
+        
+        is_plan_format = "step" in actions[0] if actions else False
+        
         for action in actions:
             action_type = action.get("type", "").lower()
-            target = action.get("target", "")
+            description = action.get("description", "") or action.get("target", "")
             coordinates = action.get("coordinates")
             value = action.get("value")
             selector = action.get("selector")
+            duration = action.get("duration", None)
             
-            logger.debug(f"执行操作: {action_type} - {target}")
+            logger.debug(f"执行操作: {action_type} - {description}")
             
             try:
                 if action_type == "click":
@@ -543,7 +589,7 @@ class InteractiveRegistration:
                         logger.warning(f"无法执行选择操作，未提供坐标或选择器: {action}")
                         continue
                 elif action_type == "wait":
-                    wait_time = action.get("duration", 2)
+                    wait_time = duration or action.get("duration", 2)
                     logger.debug(f"等待 {wait_time} 秒")
                     await asyncio.sleep(wait_time)
                 elif action_type == "scroll":
@@ -557,14 +603,30 @@ class InteractiveRegistration:
                     else:
                         logger.warning(f"无法执行按键操作，未提供按键: {action}")
                         continue
+                elif action_type == "drag":
+                    start_coordinates = action.get("start_coordinates")
+                    end_coordinates = action.get("end_coordinates") or coordinates
+                    if start_coordinates and end_coordinates:
+                        await self.browser_tool.drag_and_drop(
+                            start_x=start_coordinates[0], 
+                            start_y=start_coordinates[1],
+                            end_x=end_coordinates[0],
+                            end_y=end_coordinates[1]
+                        )
+                    else:
+                        logger.warning(f"无法执行拖动操作，未提供起始或结束坐标: {action}")
+                        continue
                 else:
                     logger.warning(f"未知操作类型: {action_type}")
                     continue
-                    
-                await self._human_delay()
+                
+                if duration is not None:
+                    await asyncio.sleep(duration)
+                else:
+                    await self._human_delay()
                 
             except Exception as e:
-                logger.error(f"执行操作时出错: {action_type} - {target} - {e}")
+                logger.error(f"执行操作时出错: {action_type} - {description} - {e}")
                 return False
                 
         return True
@@ -769,26 +831,37 @@ class InteractiveRegistration:
                     
                     return account
                 
+                plan = analysis.get("plan", [])
                 suggested_actions = analysis.get("suggested_actions", [])
+                
+                actions = plan if plan else suggested_actions
                 
                 field_types = {}
                 
-                for action in suggested_actions:
+                for action in actions:
                     if action.get("type") == "type":
-                        target = action.get("target", "").lower()
+                        description = action.get("description", "") or action.get("target", "")
+                        description = description.lower()
                         coordinates = action.get("coordinates")
                         
                         if coordinates:
-                            if any(keyword in target for keyword in ["name", "名称", "display"]) and "email" not in target:
+                            if self._match_keywords(description, ["name", "名称", "display", "姓名"]) and not self._match_keywords(description, ["email", "邮箱", "电子邮件"]):
                                 field_types[str(coordinates)] = "name"
-                                logger.debug(f"识别到名称字段: {target}, 坐标: {coordinates}")
-                            elif any(keyword in target for keyword in ["email", "邮箱", "电子邮件"]):
+                                logger.debug(f"识别到名称字段: {description}, 坐标: {coordinates}")
+                            elif self._match_keywords(description, ["email", "邮箱", "电子邮件"]):
                                 field_types[str(coordinates)] = "email"
-                                logger.debug(f"识别到邮箱字段: {target}, 坐标: {coordinates}")
+                                logger.debug(f"识别到邮箱字段: {description}, 坐标: {coordinates}")
+                            elif self._match_keywords(description, ["user", "用户名"]):
+                                field_types[str(coordinates)] = "username"
+                                logger.debug(f"识别到用户名字段: {description}, 坐标: {coordinates}")
+                            elif self._match_keywords(description, ["password", "密码"]):
+                                field_types[str(coordinates)] = "password"
+                                logger.debug(f"识别到密码字段: {description}, 坐标: {coordinates}")
                 
-                for action in suggested_actions:
+                for action in actions:
                     if action.get("type") == "type" and not action.get("value"):
-                        target = action.get("target", "").lower()
+                        description = action.get("description", "") or action.get("target", "")
+                        description = description.lower()
                         coordinates = action.get("coordinates")
                         coords_str = str(coordinates) if coordinates else ""
                         
@@ -800,29 +873,35 @@ class InteractiveRegistration:
                             elif field_type == "email":
                                 action["value"] = email
                                 logger.info(f"填充邮箱字段: {email}")
-                        elif "name" in target and "email" not in target:
+                            elif field_type == "username":
+                                action["value"] = username
+                                logger.info(f"填充用户名字段: {username}")
+                            elif field_type == "password":
+                                action["value"] = password
+                                logger.info(f"填充密码字段: {password}")
+                        elif self._match_keywords(description, ["name", "名称", "display", "姓名"]) and not self._match_keywords(description, ["email", "邮箱", "电子邮件"]):
                             action["value"] = display_name
                             logger.info(f"通过描述填充名称字段: {display_name}")
-                        elif "email" in target or "邮箱" in target:
+                        elif self._match_keywords(description, ["email", "邮箱", "电子邮件"]):
                             action["value"] = email
                             logger.info(f"通过描述填充邮箱字段: {email}")
-                        elif "user" in target or "用户名" in target:
+                        elif self._match_keywords(description, ["user", "用户名"]):
                             action["value"] = username
                             logger.info(f"填充用户名字段: {username}")
-                        elif "password" in target or "密码" in target:
+                        elif self._match_keywords(description, ["password", "密码"]):
                             action["value"] = password
                             logger.info(f"填充密码字段: {password}")
-                        elif "year" in target or "年" in target:
+                        elif self._match_keywords(description, ["year", "年"]):
                             action["value"] = str(random.randint(1970, 2000))  # 随机年份
                             logger.info(f"填充年份字段: {action['value']}")
-                        elif "month" in target or "月" in target:
+                        elif self._match_keywords(description, ["month", "月"]):
                             action["value"] = str(random.randint(1, 12))  # 随机月份
                             logger.info(f"填充月份字段: {action['value']}")
-                        elif "day" in target or "日" in target:
+                        elif self._match_keywords(description, ["day", "日"]):
                             action["value"] = str(random.randint(1, 28))  # 随机日期
                             logger.info(f"填充日期字段: {action['value']}")
                 
-                if not suggested_actions:
+                if not actions:
                     logger.warning(f"步骤 {self.current_step}: 没有建议的操作")
                     
                     common_selectors = [
