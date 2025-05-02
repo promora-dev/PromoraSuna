@@ -766,7 +766,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 15  # 最大步骤数，防止无限循环
+            max_steps = 10  # 最大步骤数，减少步骤数但确保能完成注册
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
@@ -801,8 +801,10 @@ class InteractiveRegistration:
                     await self._human_delay(2.0, 3.0)
                     continue
                 
-                if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed"]):
-                    logger.info("注册完成!")
+                if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed", "主页", "时间线"]) or await self.browser_tool.element_exists("div[data-testid='primaryColumn']", timeout=2000):
+                    logger.info("注册完成! 检测到X主页界面")
+                    
+                    await self._human_delay(3.0, 5.0)
                     
                     final_screenshot = await self._take_screenshot(f"success_final_{username}", "x")
                     logger.info(f"保存最终成功界面截图: {final_screenshot}")
@@ -929,12 +931,13 @@ class InteractiveRegistration:
                             await self.browser_tool.press("Enter")
                             await self._human_delay(1.0, 2.0)
                 else:
-                    success = await self._execute_suggested_actions(suggested_actions)
+                    actions_to_execute = plan if plan else suggested_actions
+                    success = await self._execute_suggested_actions(actions_to_execute)
                     if not success:
                         logger.warning(f"步骤 {self.current_step}: 执行操作失败")
                         
                         if self.current_step > 1:  # 不在第一步重试
-                            retry_screenshot = await self._take_screenshot(f"retry_{self.current_step}")
+                            retry_screenshot = await self._take_screenshot(f"retry_{self.current_step}", "x")
                             logger.debug(f"重试截图: {retry_screenshot}")
                             await self._human_delay(2.0, 3.0)
                             continue
@@ -945,11 +948,55 @@ class InteractiveRegistration:
                 
                 self.current_step += 1
                 
-            logger.warning(f"达到最大步骤数 {max_steps}，注册未完成")
+            logger.warning(f"达到最大步骤数 {max_steps}，检查是否已经成功")
+            
+            success_indicators = [
+                "div[data-testid='primaryColumn']",
+                "div[data-testid='AppTabBar_Home_Link']",
+                "div[data-testid='SideNav_NewTweet_Button']",
+                "a[aria-label='Profile']",
+                "div[aria-label='Home timeline']",
+                "div[aria-label='主页时间线']"
+            ]
+            
+            success_detected = False
+            for indicator in success_indicators:
+                if await self.browser_tool.element_exists(indicator, timeout=1000):
+                    logger.info(f"检测到成功指标: {indicator}")
+                    success_detected = True
+                    break
+                    
+            if success_detected:
+                logger.info("检测到X主页界面，注册可能已经成功")
+                
+                final_screenshot = await self._take_screenshot(f"final_check_success_{username}", "x")
+                logger.info(f"保存最终成功界面截图: {final_screenshot}")
+                
+                account = PlatformAccount(
+                    platform=PlatformType.X,
+                    username=username,
+                    display_name=display_name,
+                    auth_type="credentials",
+                    auth_data={
+                        "username": username,
+                        "password": password,
+                        "email": email
+                    },
+                    status="active"
+                )
+                
+                account_path = f"/tmp/promora_interactive_x_registration/x_account_{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+                with open(account_path, "w", encoding="utf-8") as f:
+                    json.dump(account.to_dict(), f, ensure_ascii=False, indent=2)
+                logger.info(f"保存账户信息: {account_path}")
+                
+                return account
+            
+            logger.warning("注册未完成")
             return None
             
         except Exception as e:
             logger.error(f"注册X账户时出错: {e}")
-            error_screenshot = await self._take_screenshot("error")
+            error_screenshot = await self._take_screenshot(f"error_{username}", "x")
             logger.debug(f"错误截图: {error_screenshot}")
             return None
