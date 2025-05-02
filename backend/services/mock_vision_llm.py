@@ -129,6 +129,138 @@ def mock_button_detection_response(filename: str) -> Dict[str, Any]:
                 })
             }
         }
+    elif "analyze_6_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_7_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_8_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_9_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_10_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_11_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_12_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_13_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_14_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "Next",
+                    "clickable": True,
+                    "recommendation": "点击'Next'按钮继续"
+                })
+            }
+        }
+    elif "analyze_15_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "完成注册",
+                    "clickable": True,
+                    "recommendation": "点击'完成注册'按钮完成注册流程"
+                })
+            }
+        }
+    elif "analyze_16_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "found": True,
+                    "coordinates": [640, 450],
+                    "button_text": "开始使用",
+                    "clickable": True,
+                    "recommendation": "点击'开始使用'按钮完成注册并开始使用X"
+                })
+            }
+        }
     
     return default_response
 
@@ -342,6 +474,358 @@ def mock_page_analysis_response(filename: str) -> Dict[str, Any]:
                         }
                     ],
                     "next_step": "设置用户名"
+                })
+            }
+        }
+    elif "analyze_6_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 用户名设置页面",
+                    "registration_step": "设置用户名",
+                    "elements": [
+                        {
+                            "type": "输入框",
+                            "description": "用户名输入框",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "下一步按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "type",
+                            "target": "用户名输入框",
+                            "coordinates": [640, 300],
+                            "value": "PromoraAI"
+                        },
+                        {
+                            "type": "click",
+                            "target": "下一步按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "设置密码"
+                })
+            }
+        }
+    elif "analyze_7_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 密码设置页面",
+                    "registration_step": "设置密码",
+                    "elements": [
+                        {
+                            "type": "输入框",
+                            "description": "密码输入框",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "下一步按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "type",
+                            "target": "密码输入框",
+                            "coordinates": [640, 300],
+                            "value": "SecurePassword123!"
+                        },
+                        {
+                            "type": "click",
+                            "target": "下一步按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "手机验证"
+                })
+            }
+        }
+    elif "analyze_8_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 手机验证页面",
+                    "registration_step": "手机验证",
+                    "elements": [
+                        {
+                            "type": "输入框",
+                            "description": "手机号输入框",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "下一步按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "type",
+                            "target": "手机号输入框",
+                            "coordinates": [640, 300],
+                            "value": "13800138000"
+                        },
+                        {
+                            "type": "click",
+                            "target": "下一步按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "验证码确认"
+                })
+            }
+        }
+    elif "analyze_9_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 验证码确认页面",
+                    "registration_step": "验证码确认",
+                    "elements": [
+                        {
+                            "type": "输入框",
+                            "description": "验证码输入框",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "下一步按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "type",
+                            "target": "验证码输入框",
+                            "coordinates": [640, 300],
+                            "value": "123456"
+                        },
+                        {
+                            "type": "click",
+                            "target": "下一步按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "个人资料设置"
+                })
+            }
+        }
+    elif "analyze_10_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 个人资料设置页面",
+                    "registration_step": "个人资料设置",
+                    "elements": [
+                        {
+                            "type": "输入框",
+                            "description": "个人简介输入框",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "下一步按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "type",
+                            "target": "个人简介输入框",
+                            "coordinates": [640, 300],
+                            "value": "AI驱动的虚拟首席市场官，为企业提供全自动内容营销和SEO增长解决方案。"
+                        },
+                        {
+                            "type": "click",
+                            "target": "下一步按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "兴趣选择"
+                })
+            }
+        }
+    elif "analyze_11_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 兴趣选择页面",
+                    "registration_step": "兴趣选择",
+                    "elements": [
+                        {
+                            "type": "复选框",
+                            "description": "兴趣选择框",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "下一步按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "click",
+                            "target": "兴趣选择框",
+                            "coordinates": [640, 300]
+                        },
+                        {
+                            "type": "click",
+                            "target": "下一步按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "头像设置"
+                })
+            }
+        }
+    elif "analyze_12_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 头像设置页面",
+                    "registration_step": "头像设置",
+                    "elements": [
+                        {
+                            "type": "按钮",
+                            "description": "上传头像按钮",
+                            "coordinates": [640, 300],
+                            "is_active": True
+                        },
+                        {
+                            "type": "按钮",
+                            "description": "跳过按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "click",
+                            "target": "跳过按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "关注推荐"
+                })
+            }
+        }
+    elif "analyze_13_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 关注推荐页面",
+                    "registration_step": "关注推荐",
+                    "elements": [
+                        {
+                            "type": "按钮",
+                            "description": "跳过按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "click",
+                            "target": "跳过按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "通知设置"
+                })
+            }
+        }
+    elif "analyze_14_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 通知设置页面",
+                    "registration_step": "通知设置",
+                    "elements": [
+                        {
+                            "type": "按钮",
+                            "description": "跳过按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "click",
+                            "target": "跳过按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "完成注册"
+                })
+            }
+        }
+    elif "analyze_15_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 完成注册页面",
+                    "registration_step": "完成注册",
+                    "elements": [
+                        {
+                            "type": "按钮",
+                            "description": "完成注册按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "click",
+                            "target": "完成注册按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "开始使用X"
+                })
+            }
+        }
+    elif "analyze_16_" in filename:
+        return {
+            "output": {
+                "text": json.dumps({
+                    "page_type": "X注册流程 - 注册成功页面",
+                    "registration_step": "注册成功",
+                    "elements": [
+                        {
+                            "type": "按钮",
+                            "description": "开始使用按钮",
+                            "coordinates": [640, 450],
+                            "is_active": True
+                        }
+                    ],
+                    "suggested_actions": [
+                        {
+                            "type": "click",
+                            "target": "开始使用按钮",
+                            "coordinates": [640, 450]
+                        }
+                    ],
+                    "next_step": "完成"
                 })
             }
         }

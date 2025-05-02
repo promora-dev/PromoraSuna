@@ -7,6 +7,7 @@
 
 import os
 import json
+import time
 import asyncio
 import random
 import logging
@@ -190,6 +191,14 @@ class InteractiveRegistration:
             return None
 
     async def _analyze_current_page(self, context: Dict[str, Any] = None) -> Dict[str, Any]:
+        """分析当前页面，获取页面类型和建议操作
+        
+        Args:
+            context: 上下文信息
+            
+        Returns:
+            分析结果，包含页面类型、建议操作等
+        """
         screenshot_path = await self._take_screenshot(f"analyze_{self.current_step}")
         if not screenshot_path:
             return {"success": False, "error": "截图失败"}
@@ -222,6 +231,23 @@ class InteractiveRegistration:
                     analysis = json.loads(json_str)
                     analysis["success"] = True
                     logger.debug(f"页面分析结果: {json.dumps(analysis, ensure_ascii=False)}")
+                    
+                    if "found" in analysis and analysis.get("found") and "coordinates" in analysis:
+                        button_text = analysis.get("button_text", "")
+                        recommendation = analysis.get("recommendation", "点击按钮")
+                        
+                        suggested_actions = [{
+                            "type": "click",
+                            "target": button_text or "检测到的按钮",
+                            "coordinates": analysis["coordinates"],
+                            "description": recommendation
+                        }]
+                        
+                        analysis["suggested_actions"] = suggested_actions
+                        analysis["page_type"] = f"包含按钮 '{button_text}' 的页面"
+                        
+                        logger.debug(f"已将按钮检测响应转换为页面分析格式，添加了 {len(suggested_actions)} 个建议操作")
+                    
                     return analysis
                 
                 return {"success": False, "error": "无法提取JSON", "raw_response": content}
@@ -232,19 +258,28 @@ class InteractiveRegistration:
             return {"success": False, "error": str(e)}
 
     async def _execute_suggested_actions(self, actions: List[Dict[str, Any]]) -> bool:
-        if not actions:
-            return False
+        """执行LLM建议的操作
         
+        Args:
+            actions: 操作列表
+            
+        Returns:
+            是否成功执行所有操作
+        """
+        if not actions:
+            logger.warning("没有建议的操作")
+            return False
+            
         for action in actions:
+            action_type = action.get("type", "").lower()
+            target = action.get("target", "")
+            coordinates = action.get("coordinates")
+            value = action.get("value")
+            selector = action.get("selector")
+            
+            logger.debug(f"执行操作: {action_type} - {target}")
+            
             try:
-                action_type = action.get("type", "").lower()
-                target = action.get("target", "")
-                coordinates = action.get("coordinates")
-                value = action.get("value")
-                selector = action.get("selector")
-                
-                logger.debug(f"执行操作: {action_type} - {target}")
-                
                 if action_type == "click":
                     await self._human_click(coordinates=coordinates, selector=selector)
                 elif action_type == "type":
@@ -254,6 +289,11 @@ class InteractiveRegistration:
                         await self.browser_tool.select_option(selector, value)
                     elif coordinates:
                         await self._human_click(coordinates=coordinates)
+                    elif selector:
+                        await self._human_click(selector=selector)
+                    else:
+                        logger.warning(f"无法执行选择操作，未提供坐标或选择器: {action}")
+                        continue
                 elif action_type == "wait":
                     wait_time = action.get("duration", 2)
                     logger.debug(f"等待 {wait_time} 秒")
@@ -266,12 +306,19 @@ class InteractiveRegistration:
                     key = action.get("key")
                     if key:
                         await self.browser_tool.press(key)
-                
+                    else:
+                        logger.warning(f"无法执行按键操作，未提供按键: {action}")
+                        continue
+                else:
+                    logger.warning(f"未知操作类型: {action_type}")
+                    continue
+                    
                 await self._human_delay()
+                
             except Exception as e:
-                logger.error(f"执行操作出错: {e}")
+                logger.error(f"执行操作时出错: {action_type} - {target} - {e}")
                 return False
-        
+                
         return True
 
     async def _handle_verification(self, platform: str, account_id: str) -> bool:
@@ -368,10 +415,21 @@ class InteractiveRegistration:
         return True  # 没有检测到验证页面，视为成功
 
     async def register_x_account(self, username: str, email: str, password: str, display_name: str = None) -> Optional[PlatformAccount]:
+        """使用交互式LLM引导注册X账户
+        
+        Args:
+            username: 用户名
+            email: 邮箱
+            password: 密码
+            display_name: 显示名称
+            
+        Returns:
+            注册成功的账户信息，失败则返回None
+        """
         if not self.browser_tool:
             logger.error("浏览器工具不可用，无法注册X账户")
             return None
-        
+            
         display_name = display_name or f"{username.capitalize()} User"
         
         context = {
@@ -388,10 +446,15 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 15  # 最大步骤数，防止无限循环
+            max_steps = 20  # 增加最大步骤数，确保能完成注册流程
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
+                
+                if await self.browser_tool.element_exists("text=Use email instead"):
+                    logger.info("检测到 'Use email instead' 按钮，执行点击...")
+                    await self._human_click(selector="text=Use email instead")
+                    await self._human_delay(0.5, 1.0)
                 
                 analysis = await self._analyze_current_page(context)
                 
@@ -407,7 +470,7 @@ class InteractiveRegistration:
                         return None
                 
                 page_type = analysis.get("page_type", "").lower()
-                if "验证" in page_type or "verification" in page_type or "captcha" in page_type or "code" in page_type:
+                if self._match_keywords(page_type, ["验证", "verification", "captcha", "code"]):
                     logger.info(f"检测到验证页面: {page_type}")
                     verification_success = await self._handle_verification("x", username)
                     
@@ -418,10 +481,11 @@ class InteractiveRegistration:
                     await self._human_delay(2.0, 3.0)
                     continue
                 
-                if "完成" in page_type or "成功" in page_type or "完成注册" in page_type or "注册成功" in page_type or "home" in page_type or "timeline" in page_type or "feed" in page_type:
+                if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed"]):
                     logger.info("注册完成!")
                     
                     account = PlatformAccount(
+                        account_id=f"x_{username.lower()}_{int(time.time())}",
                         platform=PlatformType.X,
                         username=username,
                         display_name=display_name,
