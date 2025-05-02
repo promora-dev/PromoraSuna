@@ -97,45 +97,79 @@ class InteractiveRegistration:
         text = text.lower()
         return any(kw.lower() in text for kw in keywords)
 
-    def _build_prompt(self, platform: str, step: int) -> str:
+    def _build_prompt(self, platform: str, step: int, context: dict = None) -> str:
+        self.context = context or {}
         if platform == "x":
             return f"""
-分析这个X（Twitter）注册页面的截图，当前步骤: {step}。
+你是一位网页注册助手，任务是根据截图中的网页结构和用户提供的注册信息，制定一整套自动化注册操作流程。
 
-请提供以下信息：
-1. 页面类型（注册初始页面、个人信息页面、邮箱输入页面等）
-2. 当前注册步骤
-3. 页面上的主要元素（按钮、输入框、下拉菜单等）及其位置坐标
-4. 推荐的下一步操作（点击、输入文本、选择选项等）
+---
 
-以JSON格式返回结果，包含以下字段：
+📸 页面截图：你将看到的是X（Twitter）注册页面的截图，当前步骤: {step}。
+
+📋 用户提供的注册信息如下：
 {{
-    "page_type": "页面类型描述",
-    "registration_step": "当前注册步骤",
-    "elements": [
-        {{
-            "type": "元素类型",
-            "description": "元素描述",
-            "coordinates": [x, y],
-            "is_active": true/false
-        }}
-    ],
-    "suggested_actions": [
-        {{
-            "type": "操作类型（click/type/select）",
-            "target": "操作目标描述",
-            "coordinates": [x, y],
-            "value": "要输入的值（如果是type操作）"
-        }}
-    ],
-    "next_step": "下一步描述"
+  "username": "{self.context.get('username', 'promoraai')}",
+  "email": "{self.context.get('email', 'test@promora.ai')}",
+  "password": "{self.context.get('password', 'P@ssw0rd')}",
+  "display_name": "{self.context.get('display_name', 'Promora AI')}"
 }}
 
-注意：
-- 所有坐标必须是实际的数字
-- 只返回JSON格式，不要附带解释
+---
+
+请根据截图中呈现的页面结构、字段提示、按钮文本，分析并返回一个完整的 JSON 结构，描述应该如何填写和点击这些元素，模拟人类操作流程。
+
+输出格式如下：
+
+{{
+  "page_type": "页面类型，例如：填写信息页、生日选择页、验证码页",
+  "plan": [
+    {{
+      "step": 1,
+      "type": "click | type | select",
+      "description": "点击 Name 输入框",
+      "target_hint": "输入框上方或内部提示为 'Name' 或类似",
+      "coordinates": [120, 280],
+      "value": null
+    }},
+    {{
+      "step": 2,
+      "type": "type",
+      "description": "输入用户名",
+      "coordinates": [120, 280],
+      "value": "{self.context.get('username', 'promoraai')}"
+    }},
+    {{
+      "step": 3,
+      "type": "click",
+      "description": "点击 'Next' 按钮",
+      "coordinates": [500, 600],
+      "value": null
+    }}
+  ],
+  "human_simulation": {{
+    "typing_speed": "variable",
+    "pause_between_actions": true,
+    "mouse_movement": "natural",
+    "action_sequence": "click_then_type"
+  }},
+  "final_remark": "完成后应该跳转到下一个页面"
+}}
+
+⚠️ 要求：
+- 按照用户输入内容合理匹配界面字段
+- 不遗漏任何用户输入需要填写的内容
+- 保证每个字段填写前先点击，再输入（模拟人类行为）
+- 所有坐标使用实际数字
+- 只返回 JSON，不要多余解释或 markdown
 """
-        return f"分析页面截图，当前步骤: {step}。返回页面类型、元素、建议操作等JSON格式数据。"
+        return f"""
+你是一位网页注册助手，任务是根据截图中的网页结构和用户提供的注册信息，制定自动化注册操作流程。
+
+页面截图：你将看到的是一个注册页面的截图，当前步骤: {step}。
+
+请分析页面结构并返回JSON格式的操作计划，包含页面类型、操作步骤、坐标位置等信息。
+"""
 
     async def _human_delay(self, min_delay=None, max_delay=None):
         await asyncio.sleep(random.uniform(min_delay or self.min_action_delay, max_delay or self.max_action_delay))
@@ -276,6 +310,23 @@ class InteractiveRegistration:
                         analysis["page_type"] = f"包含按钮 '{button_text}' 的页面"
                         
                         logger.debug(f"已将按钮检测响应转换为页面分析格式，添加了 {len(suggested_actions)} 个建议操作")
+                    
+                    # 处理新的JSON格式，将plan转换为suggested_actions
+                    if "plan" in analysis and "suggested_actions" not in analysis:
+                        plan = analysis.get("plan", [])
+                        suggested_actions = []
+                        
+                        for action in plan:
+                            suggested_action = {
+                                "type": action.get("type", "").split(" | ")[0],  # 取第一个类型
+                                "target": action.get("description", ""),
+                                "coordinates": action.get("coordinates", [0, 0]),
+                                "value": action.get("value")
+                            }
+                            suggested_actions.append(suggested_action)
+                            
+                        analysis["suggested_actions"] = suggested_actions
+                        logger.debug(f"已将plan转换为suggested_actions格式，共 {len(suggested_actions)} 个操作")
                     
                     if "suggested_actions" not in analysis and "plan" not in analysis:
                         page_type = analysis.get("page_type", "").lower()
@@ -592,7 +643,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 12  # 增加最大步骤数以确保能完成注册（原为8步，现为12步）
+            max_steps = 8  # 优化注册流程，减少步骤数（从12步减少到8步）
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
