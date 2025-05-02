@@ -79,7 +79,7 @@ async def analyze_image_with_gpt4_vision(
         }
         
         payload = {
-            "model": "gpt-4-1106-vision-preview",  # 使用GPT-4.1 Vision API
+            "model": "gpt-4-vision-preview",  # 使用GPT-4 Vision API
             "messages": [
                 {
                     "role": "user",
