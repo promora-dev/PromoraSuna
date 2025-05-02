@@ -7,9 +7,14 @@ This module provides the main FastAPI application for the Promora system.
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
-from agent.tools.sb_browser_tool import SandboxBrowserTool
+try:
+    from agent.tools.sb_browser_tool import SandboxBrowserTool
+    has_browser_tool = True
+except ImportError:
+    has_browser_tool = False
+    
 from ..content_generator.seo_generator import SEOContentGenerator
 from ..platform_publisher.publisher import PlatformPublisher
 from ..task_scheduler.scheduler import TaskScheduler
@@ -39,7 +44,15 @@ def create_app() -> FastAPI:
     )
     
     content_generator = SEOContentGenerator()
-    platform_publisher = PlatformPublisher()
+    
+    browser_tool = None
+    if has_browser_tool:
+        try:
+            browser_tool = SandboxBrowserTool()
+        except Exception as e:
+            print(f"Warning: Could not initialize SandboxBrowserTool: {e}")
+    
+    platform_publisher = PlatformPublisher(browser_tool=browser_tool)
     task_scheduler = TaskScheduler(content_generator, platform_publisher)
     analytics_analyzer = AnalyticsAnalyzer(platform_publisher)
     

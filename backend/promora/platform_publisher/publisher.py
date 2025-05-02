@@ -9,7 +9,13 @@ import uuid
 from typing import Dict, List, Optional, Any, Tuple
 from datetime import datetime, timedelta
 
-from agent.tools.sb_browser_tool import SandboxBrowserTool
+try:
+    from agent.tools.sb_browser_tool import SandboxBrowserTool
+    has_browser_tool = True
+except ImportError:
+    has_browser_tool = False
+    SandboxBrowserTool = Any  # Type alias for type hints
+
 from utils.logger import logger
 from .models import PublishRequest, PublishResult, PublishStatus, PlatformAccount, PlatformType
 from .platform_adapters import (
@@ -48,16 +54,21 @@ class PlatformPublisher:
         Args:
             account: Platform account to register
         """
-        if account.platform == PlatformType.X:
-            adapter = XAdapter(account, self.browser_tool)
-        elif account.platform == PlatformType.LINKEDIN:
-            adapter = LinkedInAdapter(account, self.browser_tool)
-        elif account.platform == PlatformType.MEDIUM:
-            adapter = MediumAdapter(account, self.browser_tool)
-        elif account.platform == PlatformType.ZHIHU:
-            adapter = ZhihuAdapter(account, self.browser_tool)
+        if self.browser_tool is None and account.platform in [PlatformType.ZHIHU]:
+            logger.warning(f"Cannot register {account.platform} account without browser tool. Running in demo mode.")
+            # Create a mock adapter that will simulate publishing
+            adapter = PlatformAdapter(account, None)
         else:
-            raise ValueError(f"Unsupported platform: {account.platform}")
+            if account.platform == PlatformType.X:
+                adapter = XAdapter(account, self.browser_tool)
+            elif account.platform == PlatformType.LINKEDIN:
+                adapter = LinkedInAdapter(account, self.browser_tool)
+            elif account.platform == PlatformType.MEDIUM:
+                adapter = MediumAdapter(account, self.browser_tool)
+            elif account.platform == PlatformType.ZHIHU:
+                adapter = ZhihuAdapter(account, self.browser_tool)
+            else:
+                raise ValueError(f"Unsupported platform: {account.platform}")
         
         self.platform_adapters[account.platform][account.account_id] = adapter
         logger.info(f"Registered {account.platform} account: {account.username}")
