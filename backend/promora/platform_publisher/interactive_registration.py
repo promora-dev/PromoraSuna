@@ -693,6 +693,13 @@ class InteractiveRegistration:
                 if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed"]):
                     logger.info("注册完成!")
                     
+                    final_screenshot = await self._take_screenshot(f"success_final_{username}", "x")
+                    logger.info(f"保存最终成功界面截图: {final_screenshot}")
+                    
+                    success_path = f"/tmp/promora_interactive_x_registration/x_registration_success_{username}_{int(datetime.now().timestamp())}.png"
+                    await self.browser_tool.screenshot(success_path)
+                    logger.info(f"额外保存成功界面截图: {success_path}")
+                    
                     account = PlatformAccount(
                         platform=PlatformType.X,
                         username=username,
@@ -706,28 +713,65 @@ class InteractiveRegistration:
                         status="active"
                     )
                     
+                    account_path = f"/tmp/promora_interactive_x_registration/x_account_{username}_{datetime.now().strftime('%Y%m%d%H%M%S')}.json"
+                    with open(account_path, "w", encoding="utf-8") as f:
+                        json.dump(account.to_dict(), f, ensure_ascii=False, indent=2)
+                    logger.info(f"保存账户信息: {account_path}")
+                    
                     return account
                 
                 suggested_actions = analysis.get("suggested_actions", [])
                 
+                field_types = {}
+                
+                for action in suggested_actions:
+                    if action.get("type") == "type":
+                        target = action.get("target", "").lower()
+                        coordinates = action.get("coordinates")
+                        
+                        if coordinates:
+                            if any(keyword in target for keyword in ["name", "名称", "display"]) and "email" not in target:
+                                field_types[str(coordinates)] = "name"
+                                logger.debug(f"识别到名称字段: {target}, 坐标: {coordinates}")
+                            elif any(keyword in target for keyword in ["email", "邮箱", "电子邮件"]):
+                                field_types[str(coordinates)] = "email"
+                                logger.debug(f"识别到邮箱字段: {target}, 坐标: {coordinates}")
+                
                 for action in suggested_actions:
                     if action.get("type") == "type" and not action.get("value"):
                         target = action.get("target", "").lower()
+                        coordinates = action.get("coordinates")
+                        coords_str = str(coordinates) if coordinates else ""
                         
-                        if "name" in target or "名称" in target or "display" in target:
+                        if coords_str and coords_str in field_types:
+                            field_type = field_types[coords_str]
+                            if field_type == "name":
+                                action["value"] = display_name
+                                logger.info(f"填充名称字段: {display_name}")
+                            elif field_type == "email":
+                                action["value"] = email
+                                logger.info(f"填充邮箱字段: {email}")
+                        elif "name" in target and "email" not in target:
                             action["value"] = display_name
+                            logger.info(f"通过描述填充名称字段: {display_name}")
                         elif "email" in target or "邮箱" in target:
                             action["value"] = email
+                            logger.info(f"通过描述填充邮箱字段: {email}")
                         elif "user" in target or "用户名" in target:
                             action["value"] = username
+                            logger.info(f"填充用户名字段: {username}")
                         elif "password" in target or "密码" in target:
                             action["value"] = password
+                            logger.info(f"填充密码字段: {password}")
                         elif "year" in target or "年" in target:
                             action["value"] = str(random.randint(1970, 2000))  # 随机年份
+                            logger.info(f"填充年份字段: {action['value']}")
                         elif "month" in target or "月" in target:
                             action["value"] = str(random.randint(1, 12))  # 随机月份
+                            logger.info(f"填充月份字段: {action['value']}")
                         elif "day" in target or "日" in target:
                             action["value"] = str(random.randint(1, 28))  # 随机日期
+                            logger.info(f"填充日期字段: {action['value']}")
                 
                 if not suggested_actions:
                     logger.warning(f"步骤 {self.current_step}: 没有建议的操作")
