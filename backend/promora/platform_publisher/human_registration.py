@@ -406,12 +406,12 @@ class HumanRegistration:
             screenshot_path = f"{self.screenshot_dir}/x_signup_start_{int(time.time())}.png"
             await self.browser_tool.screenshot(screenshot_path)
             
-            create_account_button = await self.browser_tool.find_element("div[role='button']:has-text('Create account')")
+            create_account_button = await self.browser_tool.find_element("span:has-text('Create account')")
             if not create_account_button:
                 logger.error("Could not find 'Create account' button")
                 return None
             
-            await self._human_click("div[role='button']:has-text('Create account')")
+            await self._human_click("span:has-text('Create account')")
             await self._human_delay()
             
             display_name = display_name or f"{username.capitalize()} User"
@@ -426,30 +426,250 @@ class HumanRegistration:
             await self._human_typing(email, "input[name='email']")
             await self._human_delay()
             
-            month = random.randint(1, 12)
-            month_selector = "select[aria-labelledby*='Month']"
-            await self._human_click(month_selector)
-            await self._human_delay(0.2, 0.5)
-            await self._human_click(f"{month_selector} option[value='{month}']")
-            await self._human_delay()
             
-            day = random.randint(1, 28)  # Using 28 to be safe for all months
-            day_selector = "select[aria-labelledby*='Day']"
-            await self._human_click(day_selector)
-            await self._human_delay(0.2, 0.5)
-            await self._human_click(f"{day_selector} option[value='{day}']")
-            await self._human_delay()
             
-            current_year = time.localtime().tm_year
-            year = random.randint(current_year - 50, current_year - 25)
-            year_selector = "select[aria-labelledby*='Year']"
-            await self._human_click(year_selector)
-            await self._human_delay(0.2, 0.5)
-            await self._human_click(f"{year_selector} option[value='{year}']")
-            await self._human_delay()
+            screenshot_path = f"{self.screenshot_dir}/x_birthday_fields_{int(time.time())}.png"
+            await self.browser_tool.screenshot(screenshot_path)
+            logger.debug(f"生日字段页面截图: {screenshot_path}")
             
-            await self._human_click("div[role='button']:has-text('Next')")
-            await self._human_delay(1.0, 2.0)
+            logger.debug("开始处理生日字段 - 使用简化方法")
+            
+            try:
+                logger.debug("尝试方法1: 使用Tab键导航并直接输入值")
+                
+                input_selectors = [
+                    "input", 
+                    "select", 
+                    "div[role='button']"
+                ]
+                
+                for selector in input_selectors:
+                    if await self.browser_tool.element_exists(selector, timeout=1000):
+                        await self._human_click(selector)
+                        await self._human_delay(0.5, 1.0)
+                        break
+                
+                for _ in range(3):
+                    await self.browser_tool.press("Tab")
+                    await self._human_delay(0.3, 0.5)
+                
+                month = random.randint(1, 12)
+                await self.browser_tool.type(str(month))
+                await self._human_delay(0.5, 1.0)
+                logger.debug(f"输入月份: {month}")
+                
+                await self.browser_tool.press("Tab")
+                await self._human_delay(0.3, 0.5)
+                day = random.randint(1, 28)
+                await self.browser_tool.type(str(day))
+                await self._human_delay(0.5, 1.0)
+                logger.debug(f"输入日期: {day}")
+                
+                await self.browser_tool.press("Tab")
+                await self._human_delay(0.3, 0.5)
+                year = random.randint(1970, 2019)  # 确保年份在2020年之前
+                await self.browser_tool.type(str(year))
+                await self._human_delay(0.5, 1.0)
+                logger.debug(f"输入年份: {year}")
+                
+                logger.debug("方法1完成: 使用Tab键导航并直接输入值")
+            except Exception as e:
+                logger.debug(f"方法1失败: {e}")
+            
+            try:
+                logger.debug("尝试方法2: 使用下拉选择方式")
+                
+                month_selectors = [
+                    "select[aria-labelledby*='Month']",
+                    "select[aria-label*='Month']",
+                    "select[name*='month']",
+                    "select:nth-of-type(1)",  # 第一个选择框通常是月份
+                    "div[role='combobox']",   # 可能是下拉菜单
+                    "div[data-testid*='dropdown']"
+                ]
+                
+                month_selected = False
+                for selector in month_selectors:
+                    exists = await self.browser_tool.element_exists(selector, timeout=1000)
+                    logger.debug(f"月份选择器 '{selector}' 存在: {exists}")
+                    
+                    if exists:
+                        try:
+                            await self._human_click(selector)
+                            await self._human_delay(0.5, 1.0)
+                            logger.debug(f"成功点击月份选择器: {selector}")
+                            
+                            random_presses = random.randint(1, 8)
+                            for _ in range(random_presses):
+                                await self.browser_tool.press("ArrowDown")
+                                await self._human_delay(0.1, 0.2)
+                            await self.browser_tool.press("Enter")
+                            await self._human_delay(0.5, 1.0)
+                            
+                            month_selected = True
+                            logger.debug(f"使用键盘选择了月份 (按下{random_presses}次)")
+                            break
+                        except Exception as e:
+                            logger.debug(f"点击月份选择器 {selector} 失败: {e}")
+                
+                day_selectors = [
+                    "select[aria-labelledby*='Day']",
+                    "select[aria-label*='Day']",
+                    "select[name*='day']",
+                    "select:nth-of-type(2)",  # 第二个选择框通常是日期
+                    "div[role='combobox']",   # 可能是下拉菜单
+                    "div[data-testid*='dropdown']"
+                ]
+                
+                day_selected = False
+                for selector in day_selectors:
+                    exists = await self.browser_tool.element_exists(selector, timeout=1000)
+                    logger.debug(f"日期选择器 '{selector}' 存在: {exists}")
+                    
+                    if exists:
+                        try:
+                            await self._human_click(selector)
+                            await self._human_delay(0.5, 1.0)
+                            logger.debug(f"成功点击日期选择器: {selector}")
+                            
+                            random_presses = random.randint(1, 15)
+                            for _ in range(random_presses):
+                                await self.browser_tool.press("ArrowDown")
+                                await self._human_delay(0.1, 0.2)
+                            await self.browser_tool.press("Enter")
+                            await self._human_delay(0.5, 1.0)
+                            
+                            day_selected = True
+                            logger.debug(f"使用键盘选择了日期 (按下{random_presses}次)")
+                            break
+                        except Exception as e:
+                            logger.debug(f"点击日期选择器 {selector} 失败: {e}")
+                
+                year_selectors = [
+                    "select[aria-labelledby*='Year']",
+                    "select[aria-label*='Year']",
+                    "select[name*='year']",
+                    "select:nth-of-type(3)",  # 第三个选择框通常是年份
+                    "div[role='combobox']",   # 可能是下拉菜单
+                    "div[data-testid*='dropdown']"
+                ]
+                
+                year_selected = False
+                for selector in year_selectors:
+                    exists = await self.browser_tool.element_exists(selector, timeout=1000)
+                    logger.debug(f"年份选择器 '{selector}' 存在: {exists}")
+                    
+                    if exists:
+                        try:
+                            await self._human_click(selector)
+                            await self._human_delay(0.5, 1.0)
+                            logger.debug(f"成功点击年份选择器: {selector}")
+                            
+                            random_presses = random.randint(15, 30)  # 确保年份在2020年之前
+                            for _ in range(random_presses):
+                                await self.browser_tool.press("ArrowDown")
+                                await self._human_delay(0.1, 0.2)
+                            await self.browser_tool.press("Enter")
+                            await self._human_delay(0.5, 1.0)
+                            
+                            year_selected = True
+                            logger.debug(f"使用键盘选择了年份 (按下{random_presses}次)")
+                            break
+                        except Exception as e:
+                            logger.debug(f"点击年份选择器 {selector} 失败: {e}")
+                
+                logger.debug(f"方法2完成: 月份选择={month_selected}, 日期选择={day_selected}, 年份选择={year_selected}")
+            except Exception as e:
+                logger.debug(f"方法2失败: {e}")
+            
+            try:
+                logger.debug("尝试方法3: 使用键盘快捷键")
+                
+                for _ in range(3):
+                    await self.browser_tool.press("Tab")
+                    await self._human_delay(0.3, 0.5)
+                
+                await self.browser_tool.press("Space")
+                await self._human_delay(0.5, 1.0)
+                
+                random_presses = random.randint(1, 8)
+                for _ in range(random_presses):
+                    await self.browser_tool.press("ArrowDown")
+                    await self._human_delay(0.1, 0.2)
+                await self.browser_tool.press("Enter")
+                await self._human_delay(0.5, 1.0)
+                
+                await self.browser_tool.press("Tab")
+                await self._human_delay(0.3, 0.5)
+                
+                await self.browser_tool.press("Space")
+                await self._human_delay(0.5, 1.0)
+                random_presses = random.randint(1, 15)
+                for _ in range(random_presses):
+                    await self.browser_tool.press("ArrowDown")
+                    await self._human_delay(0.1, 0.2)
+                await self.browser_tool.press("Enter")
+                await self._human_delay(0.5, 1.0)
+                
+                await self.browser_tool.press("Tab")
+                await self._human_delay(0.3, 0.5)
+                
+                await self.browser_tool.press("Space")
+                await self._human_delay(0.5, 1.0)
+                random_presses = random.randint(15, 30)  # 确保年份在2020年之前
+                for _ in range(random_presses):
+                    await self.browser_tool.press("ArrowDown")
+                    await self._human_delay(0.1, 0.2)
+                await self.browser_tool.press("Enter")
+                await self._human_delay(0.5, 1.0)
+                
+                logger.debug("方法3完成: 使用键盘快捷键")
+            except Exception as e:
+                logger.debug(f"方法3失败: {e}")
+            
+            screenshot_path = f"{self.screenshot_dir}/x_birthday_selected_{int(time.time())}.png"
+            await self.browser_tool.screenshot(screenshot_path)
+            logger.debug(f"日期选择后页面截图: {screenshot_path}")
+            
+            next_button_selectors = [
+                "div[role='button']:has-text('Next')",
+                "div[role='button']:has-text('下一步')",
+                "span:has-text('Next')",
+                "span:has-text('下一步')",
+                "button:has-text('Next')",
+                "button:has-text('下一步')"
+            ]
+            
+            next_clicked = False
+            for selector in next_button_selectors:
+                exists = await self.browser_tool.element_exists(selector, timeout=1000)
+                logger.debug(f"下一步按钮选择器 '{selector}' 存在: {exists}")
+                
+                if exists:
+                    try:
+                        await self._human_click(selector)
+                        logger.debug(f"成功点击下一步按钮: {selector}")
+                        next_clicked = True
+                        await self._human_delay(1.0, 2.0)
+                        break
+                    except Exception as e:
+                        logger.debug(f"点击下一步按钮 {selector} 失败: {e}")
+            
+            if not next_clicked:
+                try:
+                    logger.debug("尝试使用Enter键继续")
+                    await self.browser_tool.press("Enter")
+                    await self._human_delay(1.0, 2.0)
+                except Exception:
+                    try:
+                        logger.debug("尝试使用Tab键导航到下一步按钮")
+                        await self.browser_tool.press("Tab")
+                        await self._human_delay(0.5, 1.0)
+                        await self.browser_tool.press("Enter")
+                        await self._human_delay(1.0, 2.0)
+                    except Exception as e:
+                        logger.debug(f"尝试使用键盘导航到下一步失败: {e}")
+
             
             customize_next_button = await self.browser_tool.find_element("div[role='button']:has-text('Next')")
             if customize_next_button:
