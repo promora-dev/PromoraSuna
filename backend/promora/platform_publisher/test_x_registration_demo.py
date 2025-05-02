@@ -114,8 +114,8 @@ async def demo_x_registration():
     random_str = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
     email = f"test.{random_str}@promora.ai"
     password = ''.join(random.choices(string.ascii_letters + string.digits + "!@#$%^&*", k=12))
-    username = f"promora_{random.randint(10000, 99999)}"
-    display_name = f"Promora Test {random.randint(100, 999)}"
+    username = "PromoraAI"  # 使用指定的用户名
+    display_name = f"Promora AI {random.randint(100, 999)}"
     
     logger.info(f"开始演示X账户注册: {username} / {email}")
     logger.info(f"生成的随机密码: {password}")

@@ -9,6 +9,7 @@ import asyncio
 import random
 import time
 import os
+import json
 from typing import Dict, List, Optional, Any, Tuple
 import logging
 
@@ -22,6 +23,7 @@ except ImportError:
 from utils.logger import logger
 from .models import PlatformType, PlatformAccount
 from .email_client import EmailClient, EmailClientFactory
+from services.vision_llm import detect_button_in_image
 
 
 class HumanRegistration:
@@ -140,6 +142,68 @@ class HumanRegistration:
                 await self._human_delay(0.1, 0.3)
         
         await self.browser_tool.click(selector)
+        
+    async def _detect_and_click_button_with_llm(self, screenshot_path: str, button_description: str, fallback_selectors: List[str] = None) -> bool:
+        """使用LLM检测按钮并点击
+        
+        Args:
+            screenshot_path: 截图路径
+            button_description: 按钮描述
+            fallback_selectors: 备选选择器列表
+            
+        Returns:
+            是否成功点击按钮
+        """
+        if not self.browser_tool:
+            logger.warning("浏览器工具不可用，无法使用LLM检测按钮")
+            return False
+            
+        try:
+            logger.debug(f"使用LLM检测按钮: {button_description}")
+            button_data = await detect_button_in_image(
+                image_path=screenshot_path,
+                button_description=button_description
+            )
+            
+            logger.debug(f"LLM按钮检测结果: {json.dumps(button_data, ensure_ascii=False)}")
+            
+            if button_data.get("found", False) and button_data.get("coordinates"):
+                x, y = button_data["coordinates"]
+                logger.debug(f"LLM检测到按钮坐标: ({x}, {y})")
+                
+                offset_x = random.randint(-5, 5)
+                offset_y = random.randint(-5, 5)
+                await self.browser_tool.move_mouse(x + offset_x, y + offset_y)
+                await self._human_delay(0.1, 0.3)
+                
+                await self.browser_tool.page.mouse.click(x, y)
+                logger.debug(f"成功点击LLM检测到的按钮: {button_data.get('button_text', button_description)}")
+                await self._human_delay(1.0, 2.0)
+                return True
+                
+            elif button_data.get("recommendation") == "tab_navigation":
+                logger.debug("LLM推荐使用Tab键导航")
+                await self.browser_tool.press("Tab")
+                await self._human_delay(0.5, 1.0)
+                await self.browser_tool.press("Enter")
+                await self._human_delay(1.0, 2.0)
+                return True
+                
+            elif fallback_selectors:
+                logger.debug("LLM未检测到按钮，尝试使用备选选择器")
+                for selector in fallback_selectors:
+                    if await self.browser_tool.element_exists(selector, timeout=1000):
+                        await self._human_click(selector)
+                        logger.debug(f"使用备选选择器点击按钮: {selector}")
+                        await self._human_delay(1.0, 2.0)
+                        return True
+            
+            logger.warning(f"LLM未能检测到按钮: {button_description}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"使用LLM检测按钮时出错: {e}")
+            return False
     
     async def _handle_captcha(self) -> bool:
         """Handle CAPTCHA challenges during registration.
@@ -631,44 +695,62 @@ class HumanRegistration:
             await self.browser_tool.screenshot(screenshot_path)
             logger.debug(f"日期选择后页面截图: {screenshot_path}")
             
-            next_button_selectors = [
-                "div[role='button']:has-text('Next')",
-                "div[role='button']:has-text('下一步')",
-                "span:has-text('Next')",
-                "span:has-text('下一步')",
-                "button:has-text('Next')",
-                "button:has-text('下一步')"
-            ]
+            next_button_screenshot_path = f"{self.screenshot_dir}/x_next_button_{int(time.time())}.png"
+            await self.browser_tool.screenshot(next_button_screenshot_path)
+            logger.debug(f"下一步按钮页面截图: {next_button_screenshot_path}")
             
-            next_clicked = False
-            for selector in next_button_selectors:
-                exists = await self.browser_tool.element_exists(selector, timeout=1000)
-                logger.debug(f"下一步按钮选择器 '{selector}' 存在: {exists}")
-                
-                if exists:
-                    try:
-                        await self._human_click(selector)
-                        logger.debug(f"成功点击下一步按钮: {selector}")
-                        next_clicked = True
-                        await self._human_delay(1.0, 2.0)
-                        break
-                    except Exception as e:
-                        logger.debug(f"点击下一步按钮 {selector} 失败: {e}")
+            next_clicked = await self._detect_and_click_button_with_llm(
+                screenshot_path=next_button_screenshot_path,
+                button_description="Next button or 下一步按钮",
+                fallback_selectors=[
+                    "div[role='button']:has-text('Next')",
+                    "div[role='button']:has-text('下一步')",
+                    "span:has-text('Next')",
+                    "span:has-text('下一步')",
+                    "button:has-text('Next')",
+                    "button:has-text('下一步')"
+                ]
+            )
             
             if not next_clicked:
-                try:
-                    logger.debug("尝试使用Enter键继续")
-                    await self.browser_tool.press("Enter")
-                    await self._human_delay(1.0, 2.0)
-                except Exception:
+                logger.debug("LLM按钮检测失败，尝试传统方法")
+                next_button_selectors = [
+                    "div[role='button']:has-text('Next')",
+                    "div[role='button']:has-text('下一步')",
+                    "span:has-text('Next')",
+                    "span:has-text('下一步')",
+                    "button:has-text('Next')",
+                    "button:has-text('下一步')"
+                ]
+                
+                for selector in next_button_selectors:
+                    exists = await self.browser_tool.element_exists(selector, timeout=1000)
+                    logger.debug(f"下一步按钮选择器 '{selector}' 存在: {exists}")
+                    
+                    if exists:
+                        try:
+                            await self._human_click(selector)
+                            logger.debug(f"成功点击下一步按钮: {selector}")
+                            next_clicked = True
+                            await self._human_delay(1.0, 2.0)
+                            break
+                        except Exception as e:
+                            logger.debug(f"点击下一步按钮 {selector} 失败: {e}")
+                
+                if not next_clicked:
                     try:
-                        logger.debug("尝试使用Tab键导航到下一步按钮")
-                        await self.browser_tool.press("Tab")
-                        await self._human_delay(0.5, 1.0)
+                        logger.debug("尝试使用Enter键继续")
                         await self.browser_tool.press("Enter")
                         await self._human_delay(1.0, 2.0)
-                    except Exception as e:
-                        logger.debug(f"尝试使用键盘导航到下一步失败: {e}")
+                    except Exception:
+                        try:
+                            logger.debug("尝试使用Tab键导航到下一步按钮")
+                            await self.browser_tool.press("Tab")
+                            await self._human_delay(0.5, 1.0)
+                            await self.browser_tool.press("Enter")
+                            await self._human_delay(1.0, 2.0)
+                        except Exception as e:
+                            logger.debug(f"尝试使用键盘导航到下一步失败: {e}")
 
             
             customize_next_button = await self.browser_tool.find_element("div[role='button']:has-text('Next')")
