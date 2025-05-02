@@ -82,7 +82,20 @@ class InteractiveRegistration:
         self.current_step = 0
 
     def _match_keywords(self, text: str, keywords: List[str]) -> bool:
-        return any(kw.lower() in text.lower() for kw in keywords)
+        """检查文本中是否包含任何关键词
+        
+        Args:
+            text: 要检查的文本，可以是None或空字符串
+            keywords: 关键词列表
+            
+        Returns:
+            是否匹配任何关键词
+        """
+        if not text:
+            return False
+            
+        text = text.lower()
+        return any(kw.lower() in text for kw in keywords)
 
     def _build_prompt(self, platform: str, step: int) -> str:
         if platform == "x":
@@ -176,15 +189,31 @@ class InteractiveRegistration:
         except Exception as e:
             logger.error(f"点击出错: {e}")
 
-    async def _take_screenshot(self, name=None) -> str:
+    async def _take_screenshot(self, name=None, platform=None) -> str:
+        """截取当前页面截图
+        
+        Args:
+            name: 截图名称前缀
+            platform: 平台名称
+            
+        Returns:
+            截图路径
+        """
         if not self.browser_tool:
             logger.warning("浏览器工具不可用，无法截图")
             return None
+            
         try:
             timestamp = int(datetime.now().timestamp())
-            name = name or f"step_{self.current_step}"
-            screenshot_path = f"{self.screenshot_dir}/x_step_{name}_{timestamp}.png"
+            name = name or f"{self.current_step}"
+            platform_prefix = f"{platform or 'x'}_"
+            step_info = f"step{self.current_step}_" if self.current_step > 0 else ""
+            
+            screenshot_path = f"{self.screenshot_dir}/{platform_prefix}{step_info}{name}_{timestamp}.png"
+            
             await self.browser_tool.screenshot(screenshot_path)
+            logger.debug(f"截图已保存: {screenshot_path}")
+            
             return screenshot_path
         except Exception as e:
             logger.error(f"截图失败: {e}")
@@ -199,12 +228,12 @@ class InteractiveRegistration:
         Returns:
             分析结果，包含页面类型、建议操作等
         """
-        screenshot_path = await self._take_screenshot(f"analyze_{self.current_step}")
+        context = context or {}
+        platform = context.get("platform", "unknown")
+        screenshot_path = await self._take_screenshot(f"analyze_{self.current_step}", platform)
         if not screenshot_path:
             return {"success": False, "error": "截图失败"}
         
-        context = context or {}
-        platform = context.get("platform", "unknown")
         prompt = self._build_prompt(platform, self.current_step)
         
         try:
@@ -247,6 +276,123 @@ class InteractiveRegistration:
                         analysis["page_type"] = f"包含按钮 '{button_text}' 的页面"
                         
                         logger.debug(f"已将按钮检测响应转换为页面分析格式，添加了 {len(suggested_actions)} 个建议操作")
+                    
+                    if "suggested_actions" not in analysis and "plan" not in analysis:
+                        page_type = analysis.get("page_type", "").lower()
+                        registration_step = analysis.get("registration_step", "").lower()
+                        elements = analysis.get("elements", [])
+                        
+                        suggested_actions = []
+                        
+                        if self._match_keywords(page_type, ["name", "名称", "创建账号", "create account"]) or self._match_keywords(registration_step, ["name", "名称", "个人信息"]):
+                            input_elements = [e for e in elements if e.get("type", "").lower() in ["input", "输入框", "文本框"]]
+                            if input_elements:
+                                for element in input_elements:
+                                    coords = element.get("coordinates")
+                                    desc = element.get("description", "").lower()
+                                    
+                                    if coords:
+                                        if self._match_keywords(desc, ["name", "名称", "姓名"]):
+                                            suggested_actions.append({
+                                                "type": "click",
+                                                "target": "名称输入框",
+                                                "coordinates": coords
+                                            })
+                                            suggested_actions.append({
+                                                "type": "type",
+                                                "target": "输入名称",
+                                                "coordinates": coords,
+                                                "value": context.get("display_name", "Promora User")
+                                            })
+                                        elif self._match_keywords(desc, ["email", "邮箱", "电子邮件"]):
+                                            suggested_actions.append({
+                                                "type": "click",
+                                                "target": "邮箱输入框",
+                                                "coordinates": coords
+                                            })
+                                            suggested_actions.append({
+                                                "type": "type",
+                                                "target": "输入邮箱",
+                                                "coordinates": coords,
+                                                "value": context.get("email", "test@example.com")
+                                            })
+                            
+                            button_elements = [e for e in elements if e.get("type", "").lower() in ["button", "按钮"]]
+                            if button_elements:
+                                for button in button_elements:
+                                    coords = button.get("coordinates")
+                                    desc = button.get("description", "").lower()
+                                    
+                                    if coords and self._match_keywords(desc, ["next", "下一步", "continue", "继续"]):
+                                        suggested_actions.append({
+                                            "type": "click",
+                                            "target": "下一步按钮",
+                                            "coordinates": coords
+                                        })
+                                        break
+                        
+                        elif self._match_keywords(page_type, ["birth", "生日", "出生日期"]) or self._match_keywords(registration_step, ["birth", "生日", "出生日期"]):
+                            select_elements = [e for e in elements if e.get("type", "").lower() in ["select", "dropdown", "下拉菜单", "选择框"]]
+                            if select_elements:
+                                for element in select_elements:
+                                    coords = element.get("coordinates")
+                                    desc = element.get("description", "").lower()
+                                    
+                                    if coords:
+                                        if self._match_keywords(desc, ["month", "月"]):
+                                            suggested_actions.append({
+                                                "type": "click",
+                                                "target": "月份选择框",
+                                                "coordinates": coords
+                                            })
+                                            suggested_actions.append({
+                                                "type": "select",
+                                                "target": "选择月份",
+                                                "coordinates": coords,
+                                                "value": context.get("birth_month", "January")
+                                            })
+                                        elif self._match_keywords(desc, ["day", "日"]):
+                                            suggested_actions.append({
+                                                "type": "click",
+                                                "target": "日期选择框",
+                                                "coordinates": coords
+                                            })
+                                            suggested_actions.append({
+                                                "type": "select",
+                                                "target": "选择日期",
+                                                "coordinates": coords,
+                                                "value": context.get("birth_day", "1")
+                                            })
+                                        elif self._match_keywords(desc, ["year", "年"]):
+                                            suggested_actions.append({
+                                                "type": "click",
+                                                "target": "年份选择框",
+                                                "coordinates": coords
+                                            })
+                                            suggested_actions.append({
+                                                "type": "select",
+                                                "target": "选择年份",
+                                                "coordinates": coords,
+                                                "value": context.get("birth_year", "1990")
+                                            })
+                            
+                            button_elements = [e for e in elements if e.get("type", "").lower() in ["button", "按钮"]]
+                            if button_elements:
+                                for button in button_elements:
+                                    coords = button.get("coordinates")
+                                    desc = button.get("description", "").lower()
+                                    
+                                    if coords and self._match_keywords(desc, ["next", "下一步", "continue", "继续"]):
+                                        suggested_actions.append({
+                                            "type": "click",
+                                            "target": "下一步按钮",
+                                            "coordinates": coords
+                                        })
+                                        break
+                        
+                        if suggested_actions:
+                            analysis["suggested_actions"] = suggested_actions
+                            logger.debug(f"根据页面类型和注册步骤动态生成了 {len(suggested_actions)} 个建议操作")
                     
                     return analysis
                 
@@ -446,7 +592,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 12  # 减少最大步骤数但确保能完成注册（原为15步，现为12步）
+            max_steps = 8  # 减少最大步骤数但确保能完成注册（原为15步，现为8步）
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
@@ -481,17 +627,57 @@ class InteractiveRegistration:
                     await self._human_delay(2.0, 3.0)
                     continue
                 
-                if self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed", "主页", "时间线"]) or await self.browser_tool.element_exists("div[data-testid='primaryColumn']", timeout=2000):
+                current_url = await self.browser_tool.get_current_url()
+                url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages"])
+                
+                keywords_success = self._match_keywords(page_type, ["完成", "成功", "完成注册", "注册成功", "home", "timeline", "feed", "主页", "时间线"])
+                
+                element_success = await self.browser_tool.element_exists("div[data-testid='primaryColumn']", timeout=2000)
+                
+                home_elements = [
+                    "div[data-testid='AppTabBar_Home_Link']",
+                    "div[data-testid='SideNav_NewTweet_Button']",
+                    "a[aria-label='Profile']",
+                    "div[aria-label='Home timeline']",
+                    "div[aria-label='主页时间线']"
+                ]
+                
+                home_element_exists = False
+                for element in home_elements:
+                    if await self.browser_tool.element_exists(element, timeout=1000):
+                        logger.info(f"检测到X主页元素: {element}")
+                        home_element_exists = True
+                        break
+                
+                if url_success or keywords_success or element_success or home_element_exists:
                     logger.info("注册完成! 检测到X主页界面")
+                    logger.info(f"URL检查: {'成功' if url_success else '失败'}, 当前URL: {current_url}")
+                    logger.info(f"关键词检查: {'成功' if keywords_success else '失败'}, 页面类型: {page_type}")
+                    logger.info(f"元素检查: {'成功' if element_success else '失败'}")
+                    logger.info(f"主页元素检查: {'成功' if home_element_exists else '失败'}")
                     
-                    await self._human_delay(3.0, 5.0)
+                    await self._human_delay(5.0, 8.0)
                     
-                    final_screenshot = await self._take_screenshot(f"success_final_{username}")
+                    timestamp = int(datetime.now().timestamp())
+                    
+                    tmp_success_path = f"/tmp/x_registration_success.png"
+                    await self.browser_tool.screenshot(tmp_success_path)
+                    logger.info(f"保存成功截图到临时目录: {tmp_success_path}")
+                    
+                    final_success_path = f"/tmp/final_success_screenshot.png"
+                    await self.browser_tool.screenshot(final_success_path)
+                    logger.info(f"保存最终成功截图: {final_success_path}")
+                    
+                    final_screenshot = await self._take_screenshot(f"success_final_{username}", "x")
                     logger.info(f"保存最终成功界面截图: {final_screenshot}")
                     
-                    success_path = f"{self.screenshot_dir}/x_registration_success_{username}_{int(datetime.now().timestamp())}.png"
+                    success_path = f"{self.screenshot_dir}/x_registration_success_{username}_{timestamp}.png"
                     await self.browser_tool.screenshot(success_path)
                     logger.info(f"额外保存成功界面截图: {success_path}")
+                    
+                    await self._human_delay(3.0, 5.0)
+                    extra_screenshot = await self._take_screenshot(f"success_extra_{username}", "x")
+                    logger.info(f"保存额外成功界面截图: {extra_screenshot}")
                     
                     account = PlatformAccount(
                         account_id=f"x_{username.lower()}_{int(time.time())}",
@@ -547,13 +733,19 @@ class InteractiveRegistration:
             
             logger.warning(f"达到最大步骤数 {max_steps}，检查是否已经成功")
             
+            current_url = await self.browser_tool.get_current_url()
+            url_success = any(path in current_url for path in ["/home", "/explore", "/notifications", "/messages"])
+            
             success_indicators = [
                 "div[data-testid='primaryColumn']",
                 "div[data-testid='AppTabBar_Home_Link']",
                 "div[data-testid='SideNav_NewTweet_Button']",
                 "a[aria-label='Profile']",
                 "div[aria-label='Home timeline']",
-                "div[aria-label='主页时间线']"
+                "div[aria-label='主页时间线']",
+                "div[data-testid='tweetButtonInline']",
+                "div[data-testid='tweetButton']",
+                "div[data-testid='cellInnerDiv']"
             ]
             
             success_detected = False
@@ -563,11 +755,29 @@ class InteractiveRegistration:
                     success_detected = True
                     break
                     
-            if success_detected:
+            if success_detected or url_success:
                 logger.info("检测到X主页界面，注册可能已经成功")
+                logger.info(f"URL检查: {'成功' if url_success else '失败'}, 当前URL: {current_url}")
+                logger.info(f"元素检查: {'成功' if success_detected else '失败'}")
                 
-                final_screenshot = await self._take_screenshot(f"final_check_success_{username}")
+                await self._human_delay(5.0, 8.0)
+                
+                timestamp = int(datetime.now().timestamp())
+                
+                tmp_success_path = f"/tmp/x_registration_success.png"
+                await self.browser_tool.screenshot(tmp_success_path)
+                logger.info(f"保存成功截图到临时目录: {tmp_success_path}")
+                
+                final_success_path = f"/tmp/final_success_screenshot.png"
+                await self.browser_tool.screenshot(final_success_path)
+                logger.info(f"保存最终成功截图: {final_success_path}")
+                
+                final_screenshot = await self._take_screenshot(f"final_check_success_{username}", "x")
                 logger.info(f"保存最终成功界面截图: {final_screenshot}")
+                
+                await self._human_delay(3.0, 5.0)
+                extra_screenshot = await self._take_screenshot(f"final_extra_success_{username}", "x")
+                logger.info(f"保存额外成功界面截图: {extra_screenshot}")
                 
                 account = PlatformAccount(
                     account_id=f"x_{username.lower()}_{int(time.time())}",
