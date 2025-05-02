@@ -107,7 +107,7 @@ async def test_interactive_x_registration(args):
     logger.info(f"使用的密码: {password}")
     
     browser_tool = TestBrowserTool(
-        headless=not args.show_browser,
+        headless=True,  # 默认使用无头模式，避免XServer问题
         slow_mo=args.slow_mo,
         timeout=args.timeout,
         screenshot_dir=str(debug_dir)
