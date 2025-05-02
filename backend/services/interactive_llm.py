@@ -44,7 +44,16 @@ class InteractiveLLMGuidance:
             task_description: 任务描述，如"注册X账户"
             
         Returns:
-            包含分析结果的字典，包括：
+            包含分析结果的字典，根据平台不同返回不同的结构：
+            
+            X注册流程返回：
+            - step: 当前操作步骤名称
+            - fields: 输入字段列表
+            - buttons: 可点击按钮列表
+            - captcha: 是否存在验证码
+            - suggested_action: 建议的下一步操作
+            
+            其他平台返回：
             - page_type: 页面类型
             - elements: 页面元素列表
             - suggested_actions: 建议的操作列表
@@ -91,9 +100,51 @@ class InteractiveLLMGuidance:
                         json_str = json_match.group(1) or json_match.group(2)
                         analysis_result = json.loads(json_str)
                         analysis_result["success"] = True
+                        
+                        if platform.lower() == "x" and "注册" in task and "step" in analysis_result:
+                            analysis_result["original_format"] = True
+                            
+                            suggested_actions = []
+                            
+                            if "fields" in analysis_result:
+                                for field in analysis_result["fields"]:
+                                    if "position" in field and "label" in field:
+                                        field_key = field["label"].lower()
+                                        field_value = ""
+                                        
+                                        if field_key == "name" or field_key == "display name":
+                                            field_value = context.get("display_name", "Promora AI")
+                                        elif field_key == "email" or field_key == "phone or email":
+                                            field_value = context.get("email", "")
+                                        elif field_key == "password":
+                                            field_value = context.get("password", "")
+                                        elif field_key == "username":
+                                            field_value = context.get("username", "PromoraAI")
+                                        
+                                        suggested_actions.append({
+                                            "type": "type",
+                                            "target": field["label"],
+                                            "coordinates": field["position"],
+                                            "value": field_value
+                                        })
+                            
+                            if "buttons" in analysis_result:
+                                for button in analysis_result["buttons"]:
+                                    if "position" in button and "label" in button:
+                                        suggested_actions.append({
+                                            "type": "click",
+                                            "target": button["label"],
+                                            "coordinates": button["position"]
+                                        })
+                            
+                            analysis_result["page_type"] = analysis_result.get("step", "未知步骤")
+                            analysis_result["suggested_actions"] = suggested_actions
+                            analysis_result["next_step"] = analysis_result.get("suggested_action", "")
+                        
                         return analysis_result
                 except Exception as e:
                     logger.warning(f"无法解析LLM响应为JSON: {e}")
+                    logger.warning(f"原始响应: {content}")
                     
                 return {
                     "success": True,
@@ -258,37 +309,30 @@ class InteractiveLLMGuidance:
         email = context.get("email", "")
         
         return f"""
-        分析这个X（Twitter）注册页面的截图。我正在尝试注册一个新的X账户，用户名为"{username}"。
-        
+        你是一位负责截图识别与自动化注册操作的AI助手。我将提供截图（包含注册X账户的界面），请你根据截图内容提取以下信息：
+
+        1. 当前页面的操作步骤名称（如"填写基本信息"）
+        2. 页面上的输入字段及其类型（如：Name - 文本输入框；Birth Date - 下拉框）
+        3. 页面上可点击按钮的文字及其作用
+        4. 是否存在验证码验证或身份验证提示
+        5. 建议下一步应该进行的动作（如"点击下一步"、"输入验证码"等）
+
+        我正在尝试注册一个新的X账户，用户名为"{username}"。
         当前是注册流程的第{step}步。
-        
-        请提供以下信息：
-        1. 这是注册流程中的哪个页面/步骤？（例如：初始页面、个人信息输入、生日选择、验证码等）
-        2. 页面上有哪些关键元素（按钮、输入框、下拉菜单等）？
-        3. 我应该执行什么操作来继续注册流程？
-        4. 每个操作的具体坐标位置在哪里？
-        
-        请以JSON格式返回结果，包含以下字段：
+
+        请使用JSON结构返回，方便自动化处理：
         {{
-            "page_type": "X注册流程中的页面类型",
-            "registration_step": "注册流程中的具体步骤",
-            "elements": [
-                {{
-                    "type": "按钮/输入框/下拉菜单等",
-                    "description": "元素描述",
-                    "coordinates": [x, y],
-                    "is_active": true/false
-                }}
-            ],
-            "suggested_actions": [
-                {{
-                    "type": "click/type/select等",
-                    "target": "操作目标描述",
-                    "coordinates": [x, y],
-                    "value": "如果是输入操作，要输入的值"
-                }}
-            ],
-            "next_step": "完成当前页面后的下一步操作"
+          "step": "填写基本信息",
+          "fields": [
+            {{"label": "Name", "type": "text", "position": [x, y]}},
+            {{"label": "Phone or Email", "type": "text", "position": [x, y]}},
+            {{"label": "Date of Birth", "type": "date-selector", "position": [x, y]}}
+          ],
+          "buttons": [
+            {{"label": "Next", "action": "proceed_to_next_step", "position": [x, y]}}
+          ],
+          "captcha": false,
+          "suggested_action": "填写以上字段后点击Next"
         }}
         
         只返回JSON格式的结果，不要有其他解释。
@@ -308,37 +352,30 @@ class InteractiveLLMGuidance:
         email = context.get("email", "")
         
         return f"""
-        分析这个知乎注册页面的截图。我正在尝试注册一个新的知乎账户，邮箱为"{email}"。
-        
+        你是一位负责截图识别与自动化注册操作的AI助手。我将提供截图（包含注册知乎账户的界面），请你根据截图内容提取以下信息：
+
+        1. 当前页面的操作步骤名称（如"填写基本信息"）
+        2. 页面上的输入字段及其类型（如：邮箱 - 文本输入框；验证码 - 输入框）
+        3. 页面上可点击按钮的文字及其作用
+        4. 是否存在验证码验证或身份验证提示
+        5. 建议下一步应该进行的动作（如"点击下一步"、"输入验证码"等）
+
+        我正在尝试注册一个新的知乎账户，邮箱为"{email}"。
         当前是注册流程的第{step}步。
         
-        请提供以下信息：
-        1. 这是注册流程中的哪个页面/步骤？（例如：初始页面、个人信息输入、验证码等）
-        2. 页面上有哪些关键元素（按钮、输入框、下拉菜单等）？
-        3. 我应该执行什么操作来继续注册流程？
-        4. 每个操作的具体坐标位置在哪里？
-        
-        请以JSON格式返回结果，包含以下字段：
+        请使用JSON结构返回，方便自动化处理：
         {{
-            "page_type": "知乎注册流程中的页面类型",
-            "registration_step": "注册流程中的具体步骤",
-            "elements": [
-                {{
-                    "type": "按钮/输入框/下拉菜单等",
-                    "description": "元素描述",
-                    "coordinates": [x, y],
-                    "is_active": true/false
-                }}
-            ],
-            "suggested_actions": [
-                {{
-                    "type": "click/type/select等",
-                    "target": "操作目标描述",
-                    "coordinates": [x, y],
-                    "value": "如果是输入操作，要输入的值"
-                }}
-            ],
-            "next_step": "完成当前页面后的下一步操作"
+          "step": "填写基本信息",
+          "fields": [
+            {{"label": "邮箱", "type": "text", "position": [x, y]}},
+            {{"label": "密码", "type": "password", "position": [x, y]}},
+            {{"label": "验证码", "type": "text", "position": [x, y]}}
+          ],
+          "buttons": [
+            {{"label": "注册", "action": "submit_registration", "position": [x, y]}}
+          ],
+          "captcha": true,
+          "suggested_action": "填写以上字段后点击注册按钮"
         }}
         
         只返回JSON格式的结果，不要有其他解释。
