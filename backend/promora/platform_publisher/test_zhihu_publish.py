@@ -17,7 +17,10 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from promora.platform_publisher.platform_adapters.zhihu_adapter import ZhihuAdapter
 from promora.content_generator.seo_generator import SEOContentGenerator
-from services.llm import OpenAILLM
+from promora.platform_publisher.models import PlatformAccount, PublishRequest
+from promora.platform_publisher.test_browser_tool import TestBrowserTool
+from services.llm import make_llm_api_call
+from services.mock_llm import mock_llm_api_call
 
 logging.basicConfig(
     level=logging.INFO,
@@ -144,7 +147,7 @@ def simulate_human_mouse_movement(browser, selector):
         bbox["y"] + bbox["height"]/2
     )
 
-def test_zhihu_article_publish():
+async def test_zhihu_article_publish():
     """测试知乎文章发布功能"""
     username = os.getenv("ZHIHU_USERNAME")
     password = os.getenv("ZHIHU_PASSWORD")
@@ -153,83 +156,91 @@ def test_zhihu_article_publish():
         logger.error("缺少知乎账户凭据，请设置 ZHIHU_USERNAME 和 ZHIHU_PASSWORD 环境变量")
         return False
     
-    logger.info("初始化知乎适配器...")
-    zhihu_adapter = ZhihuAdapter(
-        headless=False,  # 设置为False以便观察浏览器行为
-        slow_mo=50,      # 放慢操作速度，更像人类
-        timeout=60000    # 增加超时时间
-    )
-    
+    logger.info("初始化浏览器工具...")
     try:
-        logger.info(f"尝试登录知乎账户: {username}")
-        login_result = zhihu_adapter.login(username, password)
+        debug_dir = "/tmp/promora_debug"
+        os.makedirs(debug_dir, exist_ok=True)
         
-        if not login_result.get("success", False):
-            logger.error(f"登录失败: {login_result.get('message', '未知错误')}")
+        browser_tool = TestBrowserTool(
+            headless=True,   # 设置为True以在无图形界面环境中运行
+            slow_mo=50,      # 放慢操作速度，更像人类
+            timeout=60000,   # 增加超时时间
+            screenshot_dir=debug_dir  # 设置截图保存目录
+        )
+        
+        logger.info("启动浏览器...")
+        await browser_tool.start()
+        
+        account = PlatformAccount(
+            platform="zhihu",
+            account_id="test_account",
+            username=username,
+            display_name="Promora Test",
+            auth_type="credentials",
+            auth_data={
+                "username": username,
+                "password": password
+            },
+            status="active"
+        )
+        
+        logger.info("初始化知乎适配器...")
+        zhihu_adapter = ZhihuAdapter(
+            account=account,
+            browser_tool=browser_tool
+        )
+        
+        logger.info(f"尝试登录知乎账户: {username}")
+        
+        login_success = False
+        max_attempts = 3
+        
+        for attempt in range(1, max_attempts + 1):
+            logger.info(f"登录尝试 {attempt}/{max_attempts}")
+            login_success = await zhihu_adapter._ensure_logged_in()
+            
+            if login_success:
+                logger.info("登录成功！")
+                break
+            
+            if attempt < max_attempts:
+                logger.warning(f"登录失败，等待10秒后重试...")
+                await asyncio.sleep(10)  # 增加等待时间，减少被识别为自动化工具的风险
+                
+                await browser_tool.navigate("https://www.zhihu.com/signin")
+                await asyncio.sleep(random.uniform(2.0, 4.0))
+        
+        if not login_success:
+            logger.error("多次尝试登录失败")
+            logger.error("可能需要人工验证或账户已被临时限制")
             return False
         
         logger.info("登录成功，准备发布文章...")
         
-        logger.info("浏览首页...")
-        zhihu_adapter.browser.page.goto("https://www.zhihu.com/")
-        time.sleep(random.uniform(2, 4))
-        simulate_human_scrolling(zhihu_adapter.browser)
-        
-        logger.info("导航到写文章页面...")
-        zhihu_adapter.browser.page.goto("https://zhuanlan.zhihu.com/write")
-        time.sleep(random.uniform(3, 5))
-        
-        logger.info(f"输入文章标题: {AI_FUTURE_ARTICLE['title']}")
-        simulate_human_typing(
-            zhihu_adapter.browser, 
-            "input.WriteIndex-titleInput", 
-            AI_FUTURE_ARTICLE["title"]
-        )
-        time.sleep(random.uniform(1, 2))
-        
-        logger.info("输入文章正文...")
-        content_selector = ".public-DraftEditor-content"
-        simulate_human_typing(
-            zhihu_adapter.browser,
-            content_selector,
-            AI_FUTURE_ARTICLE["content"],
-            min_delay=0.01,  # 正文较长，稍微加快速度
-            max_delay=0.08
+        publish_request = PublishRequest(
+            platform="zhihu",
+            title=AI_FUTURE_ARTICLE["title"],
+            content=AI_FUTURE_ARTICLE["content"],
+            hashtags=["人工智能", "AI", "未来趋势", "技术发展"],
+            image_url=None,  # 可选的图片URL
+            scheduled_time=None  # 立即发布
         )
         
-        time.sleep(random.uniform(3, 5))
-        simulate_human_scrolling(zhihu_adapter.browser, 5, 12)
+        logger.info("发布文章...")
+        publish_result = await zhihu_adapter.publish(publish_request)
         
-        logger.info("点击发布按钮...")
-        publish_button = "button.PublishPanel-button"
-        simulate_human_mouse_movement(zhihu_adapter.browser, publish_button)
-        zhihu_adapter.browser.page.click(publish_button)
-        
-        time.sleep(random.uniform(1, 2))
-        
-        logger.info("确认发布...")
-        confirm_button = "button.PublishPanel-stepTwoButton"
-        simulate_human_mouse_movement(zhihu_adapter.browser, confirm_button)
-        zhihu_adapter.browser.page.click(confirm_button)
-        
-        logger.info("等待发布完成...")
-        time.sleep(10)
-        
-        success = "发布成功" in zhihu_adapter.browser.page.content()
-        
-        if success:
+        if publish_result.status == "completed":
             logger.info("文章发布成功！")
-            
-            current_url = zhihu_adapter.browser.page.url
-            logger.info(f"文章URL: {current_url}")
+            logger.info(f"文章URL: {publish_result.post_url}")
             
             result = {
                 "success": True,
                 "platform": "zhihu",
                 "account": username,
                 "title": AI_FUTURE_ARTICLE["title"],
-                "url": current_url,
-                "timestamp": datetime.now().isoformat()
+                "url": publish_result.post_url,
+                "timestamp": datetime.now().isoformat(),
+                "screenshots": publish_result.screenshots
             }
             
             with open("zhihu_publish_result.json", "w", encoding="utf-8") as f:
@@ -237,17 +248,16 @@ def test_zhihu_article_publish():
             
             return True
         else:
-            logger.error("文章发布可能失败，未检测到成功提示")
+            logger.error(f"文章发布失败: {publish_result.error_message}")
             return False
             
     except Exception as e:
         logger.exception(f"测试过程中发生错误: {str(e)}")
         return False
-    finally:
-        logger.info("关闭浏览器...")
-        zhihu_adapter.close()
 
 if __name__ == "__main__":
+    import asyncio
+    
     logger.info("开始知乎文章发布测试...")
     
     if not os.getenv("OPENAI_API_KEY"):
@@ -260,7 +270,7 @@ if __name__ == "__main__":
         logger.info("使用方法: python test_zhihu_publish.py <username> <password>")
         logger.info("或者设置环境变量: ZHIHU_USERNAME 和 ZHIHU_PASSWORD")
     
-    success = test_zhihu_article_publish()
+    success = asyncio.run(test_zhihu_article_publish())
     
     if success:
         logger.info("测试成功完成！")

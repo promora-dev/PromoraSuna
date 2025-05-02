@@ -9,16 +9,18 @@ import random
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from agent.tools.sb_browser_tool import SandboxBrowserTool
-from utils.logger import logger
+import logging
+from typing import Any, Dict, List, Optional, Union
 from ..models import PublishRequest, PublishResult, PublishStatus, PlatformAccount
 from .base import PlatformAdapter
+
+logger = logging.getLogger("agentpress")
 
 
 class ZhihuAdapter(PlatformAdapter):
     """Adapter for publishing to Zhihu."""
     
-    def __init__(self, account: PlatformAccount, browser_tool: Optional[SandboxBrowserTool] = None):
+    def __init__(self, account: PlatformAccount, browser_tool: Optional[Any] = None):
         """Initialize the Zhihu adapter.
         
         Args:
@@ -64,50 +66,173 @@ class ZhihuAdapter(PlatformAdapter):
             logger.info(f"Logging in to Zhihu as {self.account.username}")
             screenshots = []
             
+            logger.info("导航到知乎登录页面...")
             await self.browser_tool.navigate("https://www.zhihu.com/signin")
             await asyncio.sleep(random.uniform(1.5, 3.0))
-            screenshots.append(await self._take_screenshot("zhihu_login_page"))
+            screenshots.append(await self._take_screenshot("01_zhihu_login_page"))
+            
+            current_url = await self.browser_tool.get_current_url()
+            logger.info(f"当前页面URL: {current_url}")
             
             try:
+                logger.info("尝试切换到密码登录选项卡...")
                 password_login_selector = "//div[contains(text(), '密码登录')]"
                 await self.browser_tool.wait_for_selector(password_login_selector, timeout=5000)
                 await self.browser_tool.click(password_login_selector)
                 await asyncio.sleep(random.uniform(0.8, 1.5))
+                logger.info("成功切换到密码登录选项卡")
+                screenshots.append(await self._take_screenshot("02_zhihu_password_tab"))
             except Exception as e:
-                logger.info(f"Password login tab not found or already selected: {e}")
-            
-            username_selector = "//input[@name='username']"
-            await self.browser_tool.wait_for_selector(username_selector, timeout=5000)
-            await self.browser_tool.fill(username_selector, self.account.auth_data["username"])
-            await asyncio.sleep(random.uniform(0.5, 1.2))
-            
-            password_selector = "//input[@name='password']"
-            await self.browser_tool.wait_for_selector(password_selector, timeout=5000)
-            await self.browser_tool.fill(password_selector, self.account.auth_data["password"])
-            await asyncio.sleep(random.uniform(0.8, 1.5))
-            
-            screenshots.append(await self._take_screenshot("zhihu_credentials_entered"))
-            
-            login_button_selector = "//button[contains(@class, 'SignFlow-submitButton')]"
-            await self.browser_tool.wait_for_selector(login_button_selector, timeout=5000)
-            await self.browser_tool.click(login_button_selector)
-            
-            await asyncio.sleep(random.uniform(3.0, 5.0))
+                logger.info(f"密码登录选项卡未找到或已选中: {e}")
             
             try:
-                avatar_selector = "//button[contains(@class, 'AppHeader-profileEntry')]"
-                await self.browser_tool.wait_for_selector(avatar_selector, timeout=10000)
-                screenshots.append(await self._take_screenshot("zhihu_login_success"))
-                self.is_logged_in = True
-                logger.info(f"Successfully logged in to Zhihu as {self.account.username}")
-                return True
+                logger.info("尝试输入用户名...")
+                username_selector = "//input[@name='username']"
+                await self.browser_tool.wait_for_selector(username_selector, timeout=5000)
+                await self.browser_tool.fill(username_selector, self.account.auth_data["username"])
+                await asyncio.sleep(random.uniform(0.5, 1.2))
+                logger.info("成功输入用户名")
+                screenshots.append(await self._take_screenshot("03_zhihu_username_entered"))
             except Exception as e:
-                logger.error(f"Failed to verify login: {e}")
-                screenshots.append(await self._take_screenshot("zhihu_login_failed"))
+                logger.error(f"输入用户名失败: {e}")
+                screenshots.append(await self._take_screenshot("error_username_input"))
+                return False
+            
+            try:
+                logger.info("尝试输入密码...")
+                password_selector = "//input[@name='password']"
+                await self.browser_tool.wait_for_selector(password_selector, timeout=5000)
+                await self.browser_tool.fill(password_selector, self.account.auth_data["password"])
+                await asyncio.sleep(random.uniform(0.8, 1.5))
+                logger.info("成功输入密码")
+                screenshots.append(await self._take_screenshot("04_zhihu_credentials_entered"))
+            except Exception as e:
+                logger.error(f"输入密码失败: {e}")
+                screenshots.append(await self._take_screenshot("error_password_input"))
+                return False
+            
+            try:
+                logger.info("尝试点击登录按钮...")
+                login_button_selector = "//button[contains(@class, 'SignFlow-submitButton')]"
+                await self.browser_tool.wait_for_selector(login_button_selector, timeout=5000)
+                await self.browser_tool.click(login_button_selector)
+                logger.info("成功点击登录按钮")
+                screenshots.append(await self._take_screenshot("05_zhihu_login_clicked"))
+            except Exception as e:
+                logger.error(f"点击登录按钮失败: {e}")
+                screenshots.append(await self._take_screenshot("error_login_button"))
+                return False
+            
+            logger.info("等待登录过程完成...")
+            await asyncio.sleep(random.uniform(5.0, 8.0))
+            screenshots.append(await self._take_screenshot("06_zhihu_after_login_click"))
+            
+            verification_selectors = [
+                ("//div[contains(@class, 'Captcha')]", "验证码"),
+                ("//input[contains(@placeholder, '验证码')]", "短信验证码输入框"),
+                ("//div[contains(@class, 'SignFlowInput-errorMask')]", "登录错误信息"),
+                ("//div[contains(@class, 'Login-challenge')]", "登录挑战"),
+                ("//div[contains(@class, 'Login-verifications')]", "登录验证"),
+                ("//div[contains(text(), '请完成下列验证')]", "验证请求"),
+                ("//div[contains(text(), '安全验证')]", "安全验证"),
+                ("//div[contains(@class, 'VerifyCodeInput')]", "验证码输入框"),
+                ("//div[contains(@class, 'VerificationCode')]", "验证码组件"),
+                ("//div[contains(@class, 'SignFlow-smsInputContainer')]", "短信验证码容器"),
+                ("//div[contains(@class, 'SignFlow-captchaContainer')]", "图形验证码容器"),
+                ("//button[contains(text(), '获取短信验证码')]", "获取短信验证码按钮"),
+                ("//div[contains(@class, 'SignFlow-accountInput-error')]", "账号输入错误"),
+                ("//div[contains(@class, 'SignFlow-passwordInput-error')]", "密码输入错误")
+            ]
+            
+            for selector, name in verification_selectors:
+                try:
+                    exists = await self.browser_tool.is_visible(selector, timeout=2000)
+                    if exists:
+                        try:
+                            text_content = await self.browser_tool.page.text_content(selector)
+                            logger.warning(f"检测到{name}: {text_content}")
+                        except Exception:
+                            logger.warning(f"检测到{name}，需要人工处理")
+                        screenshots.append(await self._take_screenshot(f"verification_{name.replace(' ', '_')}"))
+                        return False
+                except Exception:
+                    logger.debug(f"未检测到{name}")
+            
+            try:
+                page_content = await self.browser_tool.page.content()
+                verification_texts = [
+                    "安全验证", "验证码", "人机验证", "异常登录", 
+                    "账号异常", "账号或密码错误", "密码错误", 
+                    "请完成验证", "需要验证", "风控系统"
+                ]
+                
+                for text in verification_texts:
+                    if text in page_content:
+                        logger.warning(f"页面内容包含验证相关文本: {text}")
+                        screenshots.append(await self._take_screenshot(f"verification_text_{text}"))
+                        return False
+            except Exception as e:
+                logger.error(f"检查页面内容时出错: {e}")
+            
+            try:
+                logger.info("检查登录是否成功...")
+                selectors = [
+                    "//button[contains(@class, 'AppHeader-profileEntry')]",  # 头像按钮
+                    "//button[contains(@class, 'AppHeader-userInfo')]",      # 用户信息按钮
+                    "//img[contains(@class, 'Avatar')]",                     # 头像图片
+                    "//a[contains(@href, '/notifications')]",                # 通知链接
+                    "//button[contains(@class, 'PushNotifications')]",       # 通知按钮
+                    "//a[contains(@href, '/creator')]",                      # 创作者中心链接
+                    "//a[contains(@class, 'AppHeader-Tab')]"                 # 导航标签
+                ]
+                
+                for selector in selectors:
+                    try:
+                        logger.info(f"尝试选择器: {selector}")
+                        await self.browser_tool.wait_for_selector(selector, timeout=3000)
+                        logger.info(f"选择器 {selector} 找到，登录成功")
+                        screenshots.append(await self._take_screenshot("09_zhihu_login_success"))
+                        self.is_logged_in = True
+                        logger.info(f"成功登录知乎账户 {self.account.username}")
+                        return True
+                    except Exception as e:
+                        logger.info(f"选择器 {selector} 未找到: {e}")
+                
+                current_url = await self.browser_tool.get_current_url()
+                logger.info(f"登录后当前页面URL: {current_url}")
+                
+                if "signin" not in current_url:
+                    logger.info("URL已经不在登录页面，可能已登录成功")
+                    screenshots.append(await self._take_screenshot("10_zhihu_url_changed"))
+                    
+                    try:
+                        logger.info("尝试访问首页以确认登录状态...")
+                        await self.browser_tool.navigate("https://www.zhihu.com/")
+                        await asyncio.sleep(random.uniform(2.0, 3.0))
+                        
+                        for selector in selectors:
+                            try:
+                                if await self.browser_tool.is_visible(selector, timeout=2000):
+                                    logger.info(f"在首页找到登录元素: {selector}")
+                                    screenshots.append(await self._take_screenshot("zhihu_homepage_logged_in"))
+                                    self.is_logged_in = True
+                                    return True
+                            except Exception:
+                                pass
+                    except Exception as e:
+                        logger.error(f"访问首页确认登录状态时出错: {e}")
+                
+                logger.error("无法确认登录状态，登录可能失败")
+                screenshots.append(await self._take_screenshot("11_zhihu_login_failed"))
+                return False
+                
+            except Exception as e:
+                logger.error(f"验证登录失败: {e}")
+                screenshots.append(await self._take_screenshot("12_zhihu_login_verification_failed"))
                 return False
             
         except Exception as e:
-            logger.error(f"Error logging in to Zhihu: {e}")
+            logger.error(f"登录知乎时发生错误: {e}")
             return False
     
     async def _publish_via_browser(self, request_id: str, request: PublishRequest) -> PublishResult:
@@ -252,11 +377,17 @@ class ZhihuAdapter(PlatformAdapter):
         if not self.browser_tool:
             return f"/tmp/promora_zhihu_{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}_no_browser.png"
         
-        screenshot_path = f"/tmp/promora_zhihu_{name}_{datetime.now().strftime('%Y%m%d%H%M%S')}.png"
+        timestamp = datetime.now().strftime('%Y%m%d%H%M%S')
+        screenshot_filename = f"zhihu_{name}_{timestamp}.png"
+        
         try:
-            await self.browser_tool.screenshot(screenshot_path)
+            screenshot_path = await self.browser_tool.screenshot(
+                str(self.browser_tool.screenshot_dir / screenshot_filename)
+            )
+            logger.info(f"截图已保存到: {screenshot_path}")
         except Exception as e:
-            logger.error(f"Error taking screenshot: {e}")
+            logger.error(f"截图失败: {e}")
+            screenshot_path = f"/tmp/promora_zhihu_{name}_{timestamp}_error.png"
         
         return screenshot_path
     
