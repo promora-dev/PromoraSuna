@@ -98,50 +98,59 @@ class InteractiveLLMGuidance:
                     json_match = re.search(r'```json\s*([\s\S]*?)\s*```|({[\s\S]*})', content)
                     if json_match:
                         json_str = json_match.group(1) or json_match.group(2)
-                        analysis_result = json.loads(json_str)
-                        analysis_result["success"] = True
                         
-                        if platform.lower() == "x" and "注册" in task and "step" in analysis_result:
-                            analysis_result["original_format"] = True
-                            
-                            suggested_actions = []
-                            
-                            if "fields" in analysis_result:
-                                for field in analysis_result["fields"]:
-                                    if "position" in field and "label" in field:
-                                        field_key = field["label"].lower()
-                                        field_value = ""
-                                        
-                                        if field_key == "name" or field_key == "display name":
-                                            field_value = context.get("display_name", "Promora AI")
-                                        elif field_key == "email" or field_key == "phone or email":
-                                            field_value = context.get("email", "")
-                                        elif field_key == "password":
-                                            field_value = context.get("password", "")
-                                        elif field_key == "username":
-                                            field_value = context.get("username", "PromoraAI")
-                                        
-                                        suggested_actions.append({
-                                            "type": "type",
-                                            "target": field["label"],
-                                            "coordinates": field["position"],
-                                            "value": field_value
-                                        })
-                            
-                            if "buttons" in analysis_result:
-                                for button in analysis_result["buttons"]:
-                                    if "position" in button and "label" in button:
-                                        suggested_actions.append({
-                                            "type": "click",
-                                            "target": button["label"],
-                                            "coordinates": button["position"]
-                                        })
-                            
-                            analysis_result["page_type"] = analysis_result.get("step", "未知步骤")
-                            analysis_result["suggested_actions"] = suggested_actions
-                            analysis_result["next_step"] = analysis_result.get("suggested_action", "")
+                        json_str = re.sub(r'\[x,\s*y\]', '[100, 100]', json_str)
                         
-                        return analysis_result
+                        try:
+                            analysis_result = json.loads(json_str)
+                            analysis_result["success"] = True
+                            
+                            if platform.lower() == "x" and "注册" in task and "step" in analysis_result:
+                                analysis_result["original_format"] = True
+                                
+                                suggested_actions = []
+                                
+                                if "fields" in analysis_result:
+                                    for field in analysis_result["fields"]:
+                                        if "position" in field and "label" in field:
+                                            if isinstance(field["position"], list) and len(field["position"]) == 2:
+                                                field_key = field["label"].lower()
+                                                field_value = ""
+                                                
+                                                if field_key == "name" or field_key == "display name":
+                                                    field_value = context.get("display_name", "Promora AI")
+                                                elif field_key == "email" or field_key == "phone or email":
+                                                    field_value = context.get("email", "")
+                                                elif field_key == "password":
+                                                    field_value = context.get("password", "")
+                                                elif field_key == "username":
+                                                    field_value = context.get("username", "PromoraAI")
+                                                
+                                                suggested_actions.append({
+                                                    "type": "type",
+                                                    "target": field["label"],
+                                                    "coordinates": field["position"],
+                                                    "value": field_value
+                                                })
+                                
+                                if "buttons" in analysis_result:
+                                    for button in analysis_result["buttons"]:
+                                        if "position" in button and "label" in button:
+                                            if isinstance(button["position"], list) and len(button["position"]) == 2:
+                                                suggested_actions.append({
+                                                    "type": "click",
+                                                    "target": button["label"],
+                                                    "coordinates": button["position"]
+                                                })
+                                
+                                analysis_result["page_type"] = analysis_result.get("step", "未知步骤")
+                                analysis_result["suggested_actions"] = suggested_actions
+                                analysis_result["next_step"] = analysis_result.get("suggested_action", "")
+                            
+                            return analysis_result
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"JSON解析错误: {e}")
+                            logger.warning(f"JSON字符串: {json_str}")
                 except Exception as e:
                     logger.warning(f"无法解析LLM响应为JSON: {e}")
                     logger.warning(f"原始响应: {content}")
@@ -219,9 +228,16 @@ class InteractiveLLMGuidance:
                     json_match = re.search(r'```json\s*([\s\S]*?)\s*```|({[\s\S]*})', content)
                     if json_match:
                         json_str = json_match.group(1) or json_match.group(2)
-                        analysis_result = json.loads(json_str)
-                        analysis_result["success"] = True
-                        return analysis_result
+                        
+                        json_str = re.sub(r'\[x,\s*y\]', '[100, 100]', json_str)
+                        
+                        try:
+                            analysis_result = json.loads(json_str)
+                            analysis_result["success"] = True
+                            return analysis_result
+                        except json.JSONDecodeError as e:
+                            logger.warning(f"JSON解析错误: {e}")
+                            logger.warning(f"JSON字符串: {json_str}")
                 except Exception as e:
                     logger.warning(f"无法解析LLM响应为JSON: {e}")
                     
@@ -324,18 +340,21 @@ class InteractiveLLMGuidance:
         {{
           "step": "填写基本信息",
           "fields": [
-            {{"label": "Name", "type": "text", "position": [x, y]}},
-            {{"label": "Phone or Email", "type": "text", "position": [x, y]}},
-            {{"label": "Date of Birth", "type": "date-selector", "position": [x, y]}}
+            {{"label": "Name", "type": "text", "position": [320, 250]}},
+            {{"label": "Phone or Email", "type": "text", "position": [320, 320]}},
+            {{"label": "Date of Birth", "type": "date-selector", "position": [320, 390]}}
           ],
           "buttons": [
-            {{"label": "Next", "action": "proceed_to_next_step", "position": [x, y]}}
+            {{"label": "Next", "action": "proceed_to_next_step", "position": [320, 450]}}
           ],
           "captcha": false,
           "suggested_action": "填写以上字段后点击Next"
         }}
         
-        只返回JSON格式的结果，不要有其他解释。
+        注意：
+        1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+        2. 坐标值应该是页面上元素的中心位置
+        3. 只返回JSON格式的结果，不要有其他解释
         """
     
     def _build_zhihu_registration_prompt(self, step: int, context: Dict[str, Any]) -> str:
@@ -367,18 +386,21 @@ class InteractiveLLMGuidance:
         {{
           "step": "填写基本信息",
           "fields": [
-            {{"label": "邮箱", "type": "text", "position": [x, y]}},
-            {{"label": "密码", "type": "password", "position": [x, y]}},
-            {{"label": "验证码", "type": "text", "position": [x, y]}}
+            {{"label": "邮箱", "type": "text", "position": [320, 250]}},
+            {{"label": "密码", "type": "password", "position": [320, 320]}},
+            {{"label": "验证码", "type": "text", "position": [320, 390]}}
           ],
           "buttons": [
-            {{"label": "注册", "action": "submit_registration", "position": [x, y]}}
+            {{"label": "注册", "action": "submit_registration", "position": [320, 450]}}
           ],
           "captcha": true,
           "suggested_action": "填写以上字段后点击注册按钮"
         }}
         
-        只返回JSON格式的结果，不要有其他解释。
+        注意：
+        1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+        2. 坐标值应该是页面上元素的中心位置
+        3. 只返回JSON格式的结果，不要有其他解释
         """
     
     def _build_element_analysis_prompt(self, element_description: str, platform: str, context: Dict[str, Any]) -> str:
@@ -405,11 +427,14 @@ class InteractiveLLMGuidance:
         请以JSON格式返回结果，包含以下字段：
         {{
             "found": true/false,
-            "coordinates": [x, y],
+            "coordinates": [320, 450],
             "text": "元素上的文本",
             "clickable": true/false,
             "recommendation": "推荐的交互方式"
         }}
         
-        只返回JSON格式的结果，不要有其他解释。
+        注意：
+        1. 所有坐标必须是实际的数字，不要使用[x, y]这样的占位符
+        2. 坐标值应该是页面上元素的中心位置
+        3. 只返回JSON格式的结果，不要有其他解释
         """

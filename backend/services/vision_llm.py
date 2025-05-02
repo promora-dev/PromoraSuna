@@ -50,7 +50,7 @@ async def analyze_image_with_gpt4_vision(
     detail_level: str = "high"
 ) -> Dict[str, Any]:
     """
-    Analyze an image using GPT-4o Vision.
+    Analyze an image using GPT-4.1 (with vision capabilities).
     
     Args:
         image_path: Path to the image file
@@ -79,7 +79,7 @@ async def analyze_image_with_gpt4_vision(
         }
         
         payload = {
-            "model": "gpt-4o",
+            "model": "gpt-4-1106-vision-preview",  # 使用GPT-4.1 Vision API
             "messages": [
                 {
                     "role": "user",
