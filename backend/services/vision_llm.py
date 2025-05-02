@@ -109,7 +109,7 @@ async def analyze_image_with_gpt4_vision(
                     ) as response:
                         if response.status == 200:
                             result = await response.json()
-                            logger.debug("Successfully received GPT-4.1 API response")
+                            logger.debug(f"Successfully received GPT-4.1 API response: {result}")
                             return result
                         else:
                             error_text = await response.text()
