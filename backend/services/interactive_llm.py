@@ -77,13 +77,11 @@ class InteractiveLLMGuidance:
             result = await analyze_image_with_gpt4_vision(
                 image_path=screenshot_path,
                 prompt=prompt,
-                api_key=self.api_key,
-                max_tokens=1000,
-                temperature=0.2
+                api_key=self.api_key
             )
             
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"]
+            if "output" in result and "text" in result["output"]:
+                content = result["output"]["text"]
                 
                 debug_path = os.path.join(self.debug_dir, f"page_analysis_{platform}_{step}_{os.path.basename(screenshot_path)}.json")
                 with open(debug_path, "w", encoding="utf-8") as f:
@@ -207,13 +205,11 @@ class InteractiveLLMGuidance:
             result = await analyze_image_with_gpt4_vision(
                 image_path=screenshot_path,
                 prompt=prompt,
-                api_key=self.api_key,
-                max_tokens=500,
-                temperature=0.2
+                api_key=self.api_key
             )
             
-            if "choices" in result and len(result["choices"]) > 0:
-                content = result["choices"][0]["message"]["content"]
+            if "output" in result and "text" in result["output"]:
+                content = result["output"]["text"]
                 
                 debug_path = os.path.join(self.debug_dir, f"element_analysis_{platform}_{element_description.replace(' ', '_')}_{os.path.basename(screenshot_path)}.json")
                 with open(debug_path, "w", encoding="utf-8") as f:

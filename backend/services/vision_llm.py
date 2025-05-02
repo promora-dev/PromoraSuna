@@ -80,10 +80,21 @@ async def analyze_image_with_gpt4_vision(
         
         payload = {
             "model": "gpt-4.1",  # 使用GPT-4.1 API
-            "input": {
-                "text": prompt,
-                "image": f"data:image/jpeg;base64,{base64_image}"
-            }
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text", 
+                            "text": prompt
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": f"data:image/jpeg;base64,{base64_image}"
+                        }
+                    ]
+                }
+            ]
         }
         
         for attempt in range(MAX_RETRIES):
