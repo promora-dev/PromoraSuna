@@ -27,7 +27,7 @@ from utils.logger import logger
 from .models import PlatformType, PlatformAccount
 from .email_client import EmailClient, EmailClientFactory
 from .verification_dialog import VerificationDialog
-from services.mock_vision_llm import mock_analyze_image_with_gpt4_vision as analyze_image_with_gpt4_vision
+from services.vision_llm import analyze_image_with_gpt4_vision
 
 
 class InteractiveRegistration:

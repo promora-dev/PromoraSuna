@@ -277,9 +277,19 @@ class InteractiveRegistration:
                 api_key=self.api_key
             )
             
-            if "output" in result and "text" in result["output"]:
+            if "output" in result and isinstance(result["output"], list) and len(result["output"]) > 0:
                 import re
-                content = result["output"]["text"]
+                output_item = result["output"][0]
+                if "content" in output_item and isinstance(output_item["content"], list) and len(output_item["content"]) > 0:
+                    content_item = output_item["content"][0]
+                    if "text" in content_item:
+                        content = content_item["text"]
+                    else:
+                        logger.error(f"API响应格式不正确: 'text' 不在 content_item 中")
+                        return {"success": False, "error": "API响应格式不正确"}
+                else:
+                    logger.error(f"API响应格式不正确: 'content' 不在 output_item 中或不是列表")
+                    return {"success": False, "error": "API响应格式不正确"}
                 
                 debug_path = os.path.join(self.debug_dir, f"page_analysis_{platform}_{self.current_step}_{os.path.basename(screenshot_path)}.json")
                 with open(debug_path, "w", encoding="utf-8") as f:
