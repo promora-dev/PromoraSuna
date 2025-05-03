@@ -30,7 +30,7 @@ from .test_browser_tool import TestBrowserTool
 from .verification_dialog import VerificationDialog
 from .models import PlatformAccount, PlatformType
 from .email_client import EmailClientFactory
-from services.mock_vision_llm import mock_analyze_image_with_gpt4_vision as analyze_image_with_gpt4_vision
+from services.vision_llm import analyze_image_with_gpt4_vision
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -643,7 +643,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 8  # 优化注册流程，减少步骤数（从12步减少到8步）
+            max_steps = 12  # 恢复步骤数以确保完成注册流程（从8步增加到12步）
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
