@@ -682,18 +682,21 @@ class InteractiveRegistration:
             return False
             
         page_type = analysis.get("page_type", "").lower()
-        if "验证" in page_type or "verification" in page_type or "captcha" in page_type or "code" in page_type:
+        if "验证" in page_type or "verification" in page_type or "captcha" in page_type or "code" in page_type or "confirm" in page_type or "确认" in page_type or "email" in page_type or "邮箱" in page_type or "verify" in page_type or "check" in page_type or "security" in page_type:
             logger.info(f"检测到验证页面: {page_type}")
             
             verification_id = f"{platform}_{account_id}_{int(datetime.now().timestamp())}"
             verification_type = "unknown"
             
-            if "email" in page_type or "邮箱" in page_type:
+            if "email" in page_type or "邮箱" in page_type or "mail" in page_type or "confirm" in page_type or "确认" in page_type:
                 verification_type = "email"
+                logger.info("识别为邮箱验证类型")
             elif "captcha" in page_type or "图形" in page_type:
                 verification_type = "captcha"
+                logger.info("识别为图形验证码类型")
             elif "phone" in page_type or "手机" in page_type:
                 verification_type = "phone"
+                logger.info("识别为手机验证类型")
                 
             verification_details = {
                 "platform": platform,
@@ -808,7 +811,7 @@ class InteractiveRegistration:
                         return None
                 
                 page_type = analysis.get("page_type", "").lower()
-                if self._match_keywords(page_type, ["验证", "verification", "captcha", "code"]):
+                if self._match_keywords(page_type, ["验证", "verification", "captcha", "code", "confirm", "确认", "email", "邮箱", "verify", "check", "security"]):
                     logger.info(f"检测到验证页面: {page_type}")
                     verification_success = await self._handle_verification("x", username)
                     
