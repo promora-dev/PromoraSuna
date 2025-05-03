@@ -1097,6 +1097,7 @@ class InteractiveRegistration:
                 logger.info(f"额外保存成功界面截图(带时间戳): {timestamp_path}")
                 
                 account = PlatformAccount(
+                    account_id=f"x_{username}_{int(datetime.now().timestamp())}",
                     platform=PlatformType.X,
                     username=username,
                     display_name=display_name,
