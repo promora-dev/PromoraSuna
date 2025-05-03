@@ -787,7 +787,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 15  # 最大步骤数，增加步骤数以确保完成注册流程
+            max_steps = 20  # 最大步骤数，进一步增加步骤数以确保完成注册流程
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
@@ -1024,7 +1024,16 @@ class InteractiveRegistration:
                 "div[aria-label='Navigation']",
                 "div[aria-label='导航']",
                 "div[data-testid='ScrollSnap-List']",
-                "div[data-testid='cellInnerDiv']"
+                "div[data-testid='cellInnerDiv']",
+                "div[data-testid='DashButton_NewTweet_Button']",
+                "div[data-testid='SideNav']",
+                "div[data-testid='HoverCard']",
+                "div[data-testid='typeaheadDropdown']",
+                "div[data-testid='emptyState']",
+                "div[data-testid='empty_state_header_text']",
+                "div[data-testid='empty_state_body_text']",
+                "div[data-testid='empty_state_button']",
+                "div[data-testid='empty_state_header_container']"
             ]
             
             element_success = False
