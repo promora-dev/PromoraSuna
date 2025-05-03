@@ -787,7 +787,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 20  # 最大步骤数，进一步增加步骤数以确保完成注册流程
+            max_steps = 30  # 最大步骤数，大幅增加步骤数以确保完成注册流程
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
@@ -1004,9 +1004,22 @@ class InteractiveRegistration:
             logger.info(f"当前URL: {current_url}")
             
             url_success = False
-            if "twitter.com/home" in current_url or "x.com/home" in current_url:
-                logger.info("URL路径检查: 成功 - 检测到X主页URL")
-                url_success = True
+            success_url_patterns = [
+                "twitter.com/home", 
+                "x.com/home",
+                "twitter.com/i/flow/signup/success",
+                "x.com/i/flow/signup/success",
+                "twitter.com/i/flow/signup/complete",
+                "x.com/i/flow/signup/complete",
+                "twitter.com/i/flow/signup/done",
+                "x.com/i/flow/signup/done"
+            ]
+            
+            for pattern in success_url_patterns:
+                if pattern in current_url:
+                    logger.info(f"URL路径检查: 成功 - 检测到成功URL模式: {pattern}")
+                    url_success = True
+                    break
             
             success_indicators = [
                 "div[data-testid='primaryColumn']",
@@ -1033,7 +1046,31 @@ class InteractiveRegistration:
                 "div[data-testid='empty_state_header_text']",
                 "div[data-testid='empty_state_body_text']",
                 "div[data-testid='empty_state_button']",
-                "div[data-testid='empty_state_header_container']"
+                "div[data-testid='empty_state_header_container']",
+                
+                "a[data-testid='AppTabBar_Home_Link']",
+                "a[data-testid='AppTabBar_Explore_Link']",
+                "a[data-testid='AppTabBar_Notifications_Link']",
+                "a[data-testid='AppTabBar_Messages_Link']",
+                
+                "a[data-testid='SideNav_AccountSwitcher_Button']",
+                "a[data-testid='SideNav_NewTweet_Button']",
+                "a[href='/home']",
+                "a[href='/explore']",
+                "a[href='/notifications']",
+                "a[href='/messages']",
+                
+                "div[data-testid='confirmationSheetDialog']",
+                "div[data-testid='confirmationSheetHeading']",
+                "div[data-testid='confirmationSheetConfirm']",
+                "div[data-testid='signupSuccessDialog']",
+                "div[data-testid='registrationSuccess']",
+                "div[data-testid='welcomeMessage']",
+                
+                "header[role='banner']",
+                "nav[role='navigation']",
+                "main[role='main']",
+                "div[role='complementary']"
             ]
             
             element_success = False
