@@ -653,7 +653,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 12  # 恢复步骤数以确保完成注册流程（从8步增加到12步）
+            max_steps = 15  # 增加最大步骤数以确保能完成注册（从12步增加到15步）
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")
