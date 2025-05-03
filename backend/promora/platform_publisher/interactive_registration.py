@@ -509,45 +509,55 @@ class InteractiveRegistration:
                 api_key=self.api_key
             )
             
-            if "output" in result and "text" in result["output"]:
-                content = result["output"]["text"]
-                
-                debug_path = os.path.join(self.debug_dir, f"page_analysis_{platform}_{self.current_step}_{os.path.basename(screenshot_path)}.json")
-                with open(debug_path, "w", encoding="utf-8") as f:
-                    json.dump({
-                        "prompt": prompt,
-                        "response": content
-                    }, f, ensure_ascii=False, indent=2)
-                
-                try:
-                    import re
-                    json_match = re.search(r'({.*})', content, re.DOTALL)
-                    if json_match:
-                        json_str = json_match.group(1)
-                        analysis = json.loads(json_str)
-                        analysis["success"] = True
-                        logger.debug(f"页面分析结果: {json.dumps(analysis, ensure_ascii=False)}")
-                        return analysis
-                    else:
-                        logger.warning(f"无法从响应中提取JSON: {content}")
-                        return {
-                            "success": False,
-                            "error": "无法从响应中提取JSON",
-                            "raw_response": content
-                        }
-                except json.JSONDecodeError as e:
-                    logger.warning(f"JSON解析错误: {e}")
-                    return {
-                        "success": False,
-                        "error": f"JSON解析错误: {e}",
-                        "raw_response": content
-                    }
-            else:
-                logger.warning("API响应格式不正确")
+            content = ""
+            
+            if "output" in result and isinstance(result["output"], list) and len(result["output"]) > 0:
+                output_item = result["output"][0]
+                if "content" in output_item and isinstance(output_item["content"], list):
+                    for content_item in output_item["content"]:
+                        if "type" in content_item and content_item.get("type") == "output_text" and "text" in content_item:
+                            content = content_item["text"]
+                            logger.debug(f"成功提取文本内容: {content[:100]}...")
+                            break
+            
+            debug_path = os.path.join(self.debug_dir, f"page_analysis_{platform}_{self.current_step}_{os.path.basename(screenshot_path)}.json")
+            with open(debug_path, "w", encoding="utf-8") as f:
+                json.dump({
+                    "prompt": prompt,
+                    "response": result,
+                    "extracted_content": content
+                }, f, ensure_ascii=False, indent=2)
+            
+            if not content:
+                logger.warning("无法从API响应中提取文本内容")
                 return {
                     "success": False,
-                    "error": "API响应格式不正确",
+                    "error": "无法从API响应中提取文本内容",
                     "raw_response": str(result)
+                }
+            
+            try:
+                import re
+                json_match = re.search(r'({.*})', content, re.DOTALL)
+                if json_match:
+                    json_str = json_match.group(1)
+                    analysis = json.loads(json_str)
+                    analysis["success"] = True
+                    logger.debug(f"页面分析结果: {json.dumps(analysis, ensure_ascii=False)}")
+                    return analysis
+                else:
+                    logger.warning(f"无法从响应中提取JSON: {content}")
+                    return {
+                        "success": False,
+                        "error": "无法从响应中提取JSON",
+                        "raw_response": content
+                    }
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON解析错误: {e}")
+                return {
+                    "success": False,
+                    "error": f"JSON解析错误: {e}",
+                    "raw_response": content
                 }
         except Exception as e:
             logger.error(f"分析页面时出错: {e}")
@@ -774,7 +784,7 @@ class InteractiveRegistration:
             await self._human_delay(self.min_page_load_delay, self.max_page_load_delay)
             
             self.current_step = 1
-            max_steps = 8  # 最大步骤数，减少步骤数以优化注册流程（原为12步，现为8步）
+            max_steps = 15  # 最大步骤数，增加步骤数以确保完成注册流程
             
             while self.current_step <= max_steps:
                 logger.info(f"执行注册步骤 {self.current_step}...")

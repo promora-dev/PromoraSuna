@@ -181,34 +181,44 @@ async def detect_button_in_image(
             temperature=0.2  # Lower temperature for more deterministic results
         )
         
-        if "output" in result and "text" in result["output"]:
-            content = result["output"]["text"]
-            
-            import json
-            import re
-            
-            json_match = re.search(r'({.*})', content, re.DOTALL)
-            if json_match:
-                try:
-                    json_str = json_match.group(1)
-                    button_data = json.loads(json_str)
-                    logger.debug(f"Successfully parsed button data: {button_data}")
-                    return button_data
-                except json.JSONDecodeError:
-                    logger.warning(f"Failed to parse JSON from response: {content}")
-            
-            logger.warning(f"No valid JSON found in response: {content}")
+        content = ""
+        
+        if "output" in result and isinstance(result["output"], list) and len(result["output"]) > 0:
+            output_item = result["output"][0]
+            if "content" in output_item and isinstance(output_item["content"], list):
+                for content_item in output_item["content"]:
+                    if "type" in content_item and content_item.get("type") == "output_text" and "text" in content_item:
+                        content = content_item["text"]
+                        logger.debug(f"成功提取文本内容: {content[:100]}...")
+                        break
+        
+        if not content:
+            logger.warning("无法从GPT-4.1 API响应中提取文本内容")
             return {
                 "found": False,
-                "error": "Failed to parse button data from response",
-                "raw_response": content
+                "error": "无法从API响应中提取文本内容",
+                "raw_response": str(result)
             }
-        else:
-            logger.warning("No output.text in GPT-4.1 API response")
-            return {
-                "found": False,
-                "error": "No response from GPT-4.1 API"
-            }
+        
+        import json
+        import re
+        
+        json_match = re.search(r'({.*})', content, re.DOTALL)
+        if json_match:
+            try:
+                json_str = json_match.group(1)
+                button_data = json.loads(json_str)
+                logger.debug(f"Successfully parsed button data: {button_data}")
+                return button_data
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse JSON from response: {content}")
+        
+        logger.warning(f"No valid JSON found in response: {content}")
+        return {
+            "found": False,
+            "error": "Failed to parse button data from response",
+            "raw_response": content
+        }
     except Exception as e:
         logger.error(f"Error in detect_button_in_image: {str(e)}")
         return {
